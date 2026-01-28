@@ -27,6 +27,33 @@ pip install -e .
 uv pip install -e .
 ```
 
+### NixOS
+
+On NixOS, use the provided `shell.nix`:
+
+```bash
+git clone https://github.com/fpelliccioni/image-dedup.git
+cd image-dedup
+nix-shell
+image-dedup ~/Photos
+```
+
+The shell automatically creates a virtualenv and sets up the required library paths.
+
+**Alternative (without nix-shell):**
+
+```bash
+# Find your gcc lib path
+find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -1
+
+# Export it and run
+export LD_LIBRARY_PATH="/nix/store/<your-gcc-hash>-gcc-*-lib/lib:$LD_LIBRARY_PATH"
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+image-dedup ~/Photos
+```
+
 ## Usage
 
 ### Basic scan
