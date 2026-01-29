@@ -1,5 +1,7 @@
 """Command-line interface for image-dedup."""
 
+import json
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -51,6 +53,7 @@ def run_scan(
     dry_run: bool,
     use_cache: bool,
     cache_path: Path | None,
+    no_report: bool,
 ) -> None:
     """Run the deduplication scan."""
     # Progress tracking
@@ -77,6 +80,14 @@ def run_scan(
             use_cache=use_cache,
             cache_path=cache_path,
         )
+
+    # Save JSON report by default
+    report_path = None
+    if not no_report:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        report_path = Path.cwd() / f"image-dedup-rep-{timestamp}.json"
+        save_json_report(result, report_path)
+        console.print(f"\n[green]Report saved to:[/green] {report_path}")
 
     if output_json:
         print_json_result(result)
@@ -145,6 +156,7 @@ def main() -> None:
 @click.option("--dry-run", "-d", is_flag=True, help="Show what would be moved without actually moving")
 @click.option("--no-cache", is_flag=True, help="Disable caching (don't save/resume progress)")
 @click.option("--cache-path", type=click.Path(path_type=Path), help="Custom cache file path")
+@click.option("--no-report", is_flag=True, help="Don't save JSON report file")
 def scan(
     directories: tuple[Path, ...],
     no_recursive: bool,
@@ -157,9 +169,12 @@ def scan(
     dry_run: bool,
     no_cache: bool,
     cache_path: Path | None,
+    no_report: bool,
 ) -> None:
     """
     Scan DIRECTORIES for duplicate and similar images.
+
+    A JSON report is automatically saved to the current directory.
 
     Examples:
 
@@ -181,6 +196,7 @@ def scan(
         dry_run=dry_run,
         use_cache=not no_cache,
         cache_path=cache_path,
+        no_report=no_report,
     )
 
 
@@ -262,39 +278,56 @@ def move_duplicates(result: DeduplicationResult, destination: Path, dry_run: boo
         console.print(f"\n[green]Moved {moved_count} files ({format_size(moved_size)})[/green]")
 
 
-def print_json_result(result: DeduplicationResult) -> None:
-    """Print results as JSON."""
-    import json
-
-    data = {
+def build_report_data(result: DeduplicationResult) -> dict:
+    """Build the report data dictionary."""
+    return {
+        "generated_at": datetime.now().isoformat(),
         "summary": {
             "total_images": result.total_images,
             "total_size": result.total_size,
+            "total_size_human": format_size(result.total_size),
             "exact_duplicate_count": result.exact_duplicate_count,
-            "similar_count": result.similar_count,
+            "exact_duplicate_groups": len(result.exact_duplicates),
+            "similar_count": sum(len(g.images) for g in result.similar_images),
+            "similar_groups": len(result.similar_images),
             "potential_savings_exact": result.potential_savings_exact,
             "potential_savings_similar": result.potential_savings_similar,
+            "potential_savings_total": result.potential_savings_exact + result.potential_savings_similar,
+            "potential_savings_human": format_size(result.potential_savings_exact + result.potential_savings_similar),
             "error_count": len(result.errors),
         },
         "exact_duplicates": [
             {
-                "files": [{"path": str(img.path), "size": img.size} for img in g.images],
+                "files": [{"path": str(img.path), "size": img.size, "size_human": format_size(img.size)} for img in g.images],
                 "potential_savings": g.potential_savings,
+                "potential_savings_human": format_size(g.potential_savings),
             }
             for g in result.exact_duplicates
         ],
         "similar_images": [
             {
-                "files": [{"path": str(img.path), "size": img.size} for img in g.images],
-                "similarity": g.similarity,
+                "files": [{"path": str(img.path), "size": img.size, "size_human": format_size(img.size)} for img in g.images],
+                "similarity_bits": g.similarity,
                 "potential_savings": g.potential_savings,
+                "potential_savings_human": format_size(g.potential_savings),
             }
             for g in result.similar_images
         ],
         "errors": [{"path": str(p), "error": e} for p, e in result.errors],
     }
 
-    print(json.dumps(data, indent=2))
+
+def save_json_report(result: DeduplicationResult, path: Path) -> None:
+    """Save results as JSON file."""
+    data = build_report_data(result)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def print_json_result(result: DeduplicationResult) -> None:
+    """Print results as JSON to stdout."""
+    data = build_report_data(result)
+    print(json.dumps(data, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
