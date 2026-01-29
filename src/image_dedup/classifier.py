@@ -119,15 +119,37 @@ def _load_face_detector():
     try:
         import mediapipe as mp
 
-        _face_detector = mp.solutions.face_detection.FaceDetection(
-            model_selection=1,  # Full range model
-            min_detection_confidence=0.5
-        )
+        # Try new API first (mediapipe >= 0.10.9)
+        if hasattr(mp, 'tasks'):
+            from mediapipe.tasks import python
+            from mediapipe.tasks.python import vision
+            import urllib.request
+            import os
+
+            # Download model if needed
+            model_path = os.path.join(os.path.expanduser("~"), ".cache", "image-dedup", "blaze_face_short_range.tflite")
+            os.makedirs(os.path.dirname(model_path), exist_ok=True)
+
+            if not os.path.exists(model_path):
+                urllib.request.urlretrieve(
+                    "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+                    model_path
+                )
+
+            base_options = python.BaseOptions(model_asset_path=model_path)
+            options = vision.FaceDetectorOptions(base_options=base_options)
+            _face_detector = ("new", vision.FaceDetector.create_from_options(options))
+        else:
+            # Old API (mediapipe < 0.10.9)
+            _face_detector = ("old", mp.solutions.face_detection.FaceDetection(
+                model_selection=1,
+                min_detection_confidence=0.5
+            ))
+
         return _face_detector
-    except ImportError:
-        raise ImportError(
-            "MediaPipe not installed. Run: pip install image-dedup[classify]"
-        )
+    except Exception as e:
+        # Return None to indicate face detection is unavailable
+        return None
 
 
 def detect_faces(image_path: Path) -> tuple[bool, int]:
@@ -137,9 +159,15 @@ def detect_faces(image_path: Path) -> tuple[bool, int]:
     Returns:
         Tuple of (has_faces, face_count)
     """
+    detector_info = _load_face_detector()
+
+    if detector_info is None:
+        # Face detection unavailable, skip
+        return False, 0
+
     import numpy as np
 
-    detector = _load_face_detector()
+    api_type, detector = detector_info
 
     with Image.open(image_path) as img:
         # Convert to RGB if needed
@@ -149,11 +177,19 @@ def detect_faces(image_path: Path) -> tuple[bool, int]:
         # Convert to numpy array
         img_array = np.array(img)
 
-        # Detect faces
-        results = detector.process(img_array)
+        if api_type == "new":
+            # New mediapipe API
+            import mediapipe as mp
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_array)
+            results = detector.detect(mp_image)
+            if results.detections:
+                return True, len(results.detections)
+        else:
+            # Old mediapipe API
+            results = detector.process(img_array)
+            if results.detections:
+                return True, len(results.detections)
 
-        if results.detections:
-            return True, len(results.detections)
         return False, 0
 
 
