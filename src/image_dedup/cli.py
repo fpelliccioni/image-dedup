@@ -13,6 +13,7 @@ from rich.table import Table
 from .cache import HashCache
 from .dedup import DeduplicationResult, DuplicateGroup, find_duplicates, format_size
 from .review import generate_html_review
+from .scanner import scan_multiple_directories
 from .server import run_server
 
 console = Console()
@@ -398,6 +399,156 @@ def serve(report: Path, host: str, port: int) -> None:
 
     try:
         run_server(report, host=host, port=port)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error starting server:[/red] {e}")
+        raise SystemExit(1)
+
+
+@main.command()
+@click.argument("directories", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--no-recursive", "-n", is_flag=True, help="Don't scan subdirectories")
+@click.option("--output", "-o", type=click.Path(path_type=Path), help="Output JSON file path")
+def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | None) -> None:
+    """
+    Classify images as family photos vs junk.
+
+    Uses AI to detect:
+    - Photos with faces (KEEP)
+    - Real photos without faces (REVIEW)
+    - Screenshots, memes, graphics (TRASH)
+
+    Requires extra dependencies: pip install image-dedup[classify]
+
+    Examples:
+
+        image-dedup classify ~/Pictures
+
+        image-dedup classify ~/Photos ~/Downloads -o classification.json
+    """
+    try:
+        from .classifier import classify_images, Category
+    except ImportError as e:
+        console.print("[red]Classification dependencies not installed.[/red]")
+        console.print("Run: [cyan]pip install image-dedup[classify][/cyan]")
+        console.print(f"\nError: {e}")
+        raise SystemExit(1)
+
+    # Scan for images
+    console.print("[blue]Scanning for images...[/blue]")
+    image_paths = list(scan_multiple_directories(list(directories), recursive=not no_recursive))
+    console.print(f"Found [green]{len(image_paths)}[/green] images")
+
+    if not image_paths:
+        console.print("[yellow]No images found.[/yellow]")
+        return
+
+    # Classify images
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Initializing AI models...", total=len(image_paths))
+
+        def update_progress(status: str, current: int, total: int) -> None:
+            progress.update(task, description=status, completed=current, total=total)
+
+        report = classify_images(image_paths, progress_callback=update_progress)
+
+    # Print summary
+    console.print()
+    console.print(Panel(
+        f"[bold]Total images:[/bold] {report.total_images}\n"
+        f"[bold green]KEEP (with faces):[/bold green] {report.keep_count}\n"
+        f"[bold yellow]REVIEW (no faces):[/bold yellow] {report.review_count}\n"
+        f"[bold red]TRASH (junk):[/bold red] {report.trash_count}\n"
+        f"[bold]Errors:[/bold] {len(report.errors)}",
+        title="Classification Results",
+        border_style="blue"
+    ))
+
+    # Save JSON report
+    if output is None:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        output = Path.cwd() / f"image-classify-{timestamp}.json"
+
+    report_data = {
+        "generated_at": datetime.now().isoformat(),
+        "summary": {
+            "total_images": report.total_images,
+            "keep_count": report.keep_count,
+            "review_count": report.review_count,
+            "trash_count": report.trash_count,
+            "error_count": len(report.errors),
+        },
+        "keep": [
+            {
+                "path": str(r.path),
+                "face_count": r.face_count,
+                "clip_label": r.best_clip_label,
+                "confidence": r.confidence,
+            }
+            for r in report.results if r.category == Category.KEEP
+        ],
+        "review": [
+            {
+                "path": str(r.path),
+                "clip_label": r.best_clip_label,
+                "confidence": r.confidence,
+            }
+            for r in report.results if r.category == Category.REVIEW
+        ],
+        "trash": [
+            {
+                "path": str(r.path),
+                "clip_label": r.best_clip_label,
+                "confidence": r.confidence,
+            }
+            for r in report.results if r.category == Category.TRASH
+        ],
+        "errors": [{"path": str(p), "error": e} for p, e in report.errors],
+    }
+
+    with open(output, "w", encoding="utf-8") as f:
+        json.dump(report_data, f, indent=2, ensure_ascii=False)
+
+    console.print(f"\n[green]Report saved to:[/green] {output}")
+    console.print("\n[dim]Use 'image-dedup classify-review <report.json>' to review results[/dim]")
+
+
+@main.command("classify-review")
+@click.argument("report", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--host", "-h", default="127.0.0.1", help="Host to bind to. Default: 127.0.0.1")
+@click.option("--port", "-p", default=5000, type=int, help="Port to bind to. Default: 5000")
+def classify_review(report: Path, host: str, port: int) -> None:
+    """
+    Start a web server to review classification results.
+
+    Opens an interactive page to review KEEP/REVIEW/TRASH images
+    and delete the ones you don't want.
+
+    Examples:
+
+        image-dedup classify-review image-classify-20260129-164242.json
+    """
+    from .classify_server import run_classify_server
+
+    console.print(f"[blue]Loading report:[/blue] {report}")
+    console.print(f"[green]Starting server at:[/green] http://{host}:{port}")
+    console.print("[dim]Press Ctrl+C to stop the server[/dim]")
+
+    try:
+        import webbrowser
+        webbrowser.open(f"http://{host}:{port}")
+    except Exception:
+        pass
+
+    try:
+        run_classify_server(report, host=host, port=port)
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped[/yellow]")
     except Exception as e:
