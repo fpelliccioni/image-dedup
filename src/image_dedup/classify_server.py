@@ -1,6 +1,7 @@
 """Web server for reviewing and deleting classified images."""
 
 import json
+import logging
 import os
 import shutil
 from io import BytesIO
@@ -9,6 +10,12 @@ from urllib.parse import quote, unquote
 
 from flask import Flask, jsonify, request, Response
 from PIL import Image
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 THUMBNAIL_SIZE = (250, 250)
 LIGHTBOX_SIZE = (1200, 1200)
@@ -53,9 +60,38 @@ def generate_image_bytes(image_path: Path, size: tuple[int, int]) -> bytes | Non
 def index():
     """Serve the classification review page."""
     global _current_report
+    logging.info("GET / - Serving main page")
     if _current_report is None:
         return "No report loaded", 500
     return generate_classify_html(_current_report)
+
+
+@app.route("/api/data/<category>")
+def get_category_data(category):
+    """Get paginated data for a category."""
+    global _current_report
+    if _current_report is None:
+        return jsonify({"error": "No report loaded"}), 500
+
+    if category not in ["keep", "review", "trash"]:
+        return jsonify({"error": "Invalid category"}), 400
+
+    offset = request.args.get("offset", 0, type=int)
+    limit = request.args.get("limit", 50, type=int)
+
+    items = _current_report.get(category, [])
+    total = len(items)
+    page_items = items[offset:offset + limit]
+
+    logging.info(f"GET /api/data/{category} - offset={offset}, limit={limit}, returning {len(page_items)} items (total: {total})")
+
+    return jsonify({
+        "items": page_items,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + limit < total
+    })
 
 
 @app.route("/api/thumbnail")
@@ -282,11 +318,6 @@ def delete_all_trash():
 def generate_classify_html(report: dict) -> str:
     """Generate HTML for classification review with lazy loading."""
     summary = report.get("summary", {})
-
-    # Build JSON data for JavaScript
-    keep_data = json.dumps(report.get("keep", []))
-    review_data = json.dumps(report.get("review", []))
-    trash_data = json.dumps(report.get("trash", []))
 
     return f'''<!DOCTYPE html>
 <html lang="en">
@@ -616,19 +647,13 @@ def generate_classify_html(report: dict) -> str:
 
     <script>
         const PAGE_SIZE = 50;
-        const data = {{
-            trash: {trash_data},
-            review: {review_data},
-            keep: {keep_data}
-        }};
+        const data = {{ trash: [], review: [], keep: [] }};
+        const totals = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)} }};
         const loaded = {{ trash: 0, review: 0, keep: 0 }};
-        const counts = {{
-            trash: data.trash.filter(i => !i.deleted && i.status !== 'deleted').length,
-            review: data.review.filter(i => !i.deleted && i.status !== 'deleted').length,
-            keep: data.keep.filter(i => !i.deleted && i.status !== 'deleted').length
-        }};
+        const counts = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)} }};
         let currentTab = 'trash';
         let loading = false;
+        let fullyLoaded = {{ trash: false, review: false, keep: false }};
 
         // Intersection Observer for lazy loading images
         const imageObserver = new IntersectionObserver((entries) => {{
@@ -719,20 +744,32 @@ def generate_classify_html(report: dict) -> str:
             return card;
         }}
 
-        function loadMore(category) {{
-            if (loading) return;
+        async function loadMore(category) {{
+            if (loading || fullyLoaded[category]) return;
             loading = true;
 
             const grid = document.getElementById(category + '-grid');
-            const items = data[category];
-            const start = loaded[category];
-            const end = Math.min(start + PAGE_SIZE, items.length);
+            const offset = loaded[category];
 
-            for (let i = start; i < end; i++) {{
-                grid.appendChild(createCard(items[i], category));
+            try {{
+                const response = await fetch(`/api/data/${{category}}?offset=${{offset}}&limit=${{PAGE_SIZE}}`);
+                const result = await response.json();
+
+                result.items.forEach(item => {{
+                    data[category].push(item);
+                    grid.appendChild(createCard(item, category));
+                }});
+
+                loaded[category] = offset + result.items.length;
+                fullyLoaded[category] = !result.has_more;
+
+                // Update counts based on actual data
+                counts[category] = result.total - data[category].filter(i => i.deleted || i.status === 'deleted').length;
+                updateCounts();
+            }} catch (error) {{
+                console.error('Error loading data:', error);
             }}
 
-            loaded[category] = end;
             loading = false;
         }}
 
@@ -929,7 +966,12 @@ def run_classify_server(report_path: Path, host: str = "127.0.0.1", port: int = 
     """Run the classification review server."""
     global _current_report, _report_path
 
+    logging.info(f"Loading report: {report_path}")
     _report_path = report_path
     _current_report = load_report(report_path)
+
+    summary = _current_report.get("summary", {})
+    logging.info(f"Report loaded - KEEP: {summary.get('keep_count', 0)}, REVIEW: {summary.get('review_count', 0)}, TRASH: {summary.get('trash_count', 0)}")
+    logging.info(f"Starting server at http://{host}:{port}")
 
     app.run(host=host, port=port, debug=False, threaded=True)
