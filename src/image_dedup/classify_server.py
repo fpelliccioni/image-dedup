@@ -1067,10 +1067,32 @@ def generate_classify_html(report: dict) -> str:
             }});
         }}
 
-        function shareWhatsApp(path) {{
-            const fileName = path.split(/[\\\\/]/).pop();
-            const message = encodeURIComponent('Check this image: ' + fileName + '\\n\\nPath: ' + path);
-            window.open('https://web.whatsapp.com/send?text=' + message, '_blank');
+        async function shareWhatsApp(path) {{
+            const encodedPath = encodeURIComponent(path);
+            try {{
+                // Fetch the image
+                const response = await fetch('/api/lightbox?path=' + encodedPath);
+                const blob = await response.blob();
+
+                // Copy to clipboard
+                await navigator.clipboard.write([
+                    new ClipboardItem({{ [blob.type]: blob }})
+                ]);
+
+                showToast('Image copied! Paste in WhatsApp (Ctrl+V)', 'success');
+
+                // Open WhatsApp Web
+                setTimeout(() => {{
+                    window.open('https://web.whatsapp.com/', '_blank');
+                }}, 500);
+            }} catch (error) {{
+                console.error('Clipboard error:', error);
+                // Fallback: just open WhatsApp with path
+                const fileName = path.split(/[\\\\/]/).pop();
+                const message = encodeURIComponent('Image: ' + fileName);
+                window.open('https://web.whatsapp.com/send?text=' + message, '_blank');
+                showToast('Could not copy image. Opening WhatsApp...', 'info');
+            }}
         }}
 
         function organizeAll() {{
