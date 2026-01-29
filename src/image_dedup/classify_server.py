@@ -2,7 +2,7 @@
 
 import json
 import os
-import base64
+import shutil
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -24,6 +24,14 @@ def load_report(report_path: Path) -> dict:
     """Load a JSON report file."""
     with open(report_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def save_report() -> None:
+    """Save the current report back to disk."""
+    global _current_report, _report_path
+    if _current_report and _report_path:
+        with open(_report_path, "w", encoding="utf-8") as f:
+            json.dump(_current_report, f, indent=2, ensure_ascii=False)
 
 
 def generate_image_bytes(image_path: Path, size: tuple[int, int]) -> bytes | None:
@@ -89,20 +97,184 @@ def get_lightbox():
 @app.route("/api/delete", methods=["POST"])
 def delete_image():
     """Delete an image file."""
+    global _current_report
+
     data = request.get_json()
     if not data or "path" not in data:
         return jsonify({"success": False, "error": "No path provided"}), 400
 
     file_path = Path(data["path"])
+    category = data.get("category", "")
 
     if not file_path.exists():
         return jsonify({"success": False, "error": "File not found"}), 404
 
     try:
         os.remove(file_path)
+
+        # Update the report
+        if _current_report and category:
+            for item in _current_report.get(category, []):
+                if item.get("path") == str(file_path) or item.get("original_path") == str(file_path):
+                    item["deleted"] = True
+                    item["status"] = "deleted"
+                    break
+            save_report()
+
         return jsonify({"success": True, "message": f"Deleted {file_path}"})
     except PermissionError:
         return jsonify({"success": False, "error": "Permission denied"}), 403
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/keep", methods=["POST"])
+def keep_image():
+    """Move an image to the KEEP folder."""
+    global _current_report, _report_path
+
+    data = request.get_json()
+    if not data or "path" not in data:
+        return jsonify({"success": False, "error": "No path provided"}), 400
+
+    file_path = Path(data["path"])
+    from_category = data.get("category", "")
+
+    if not file_path.exists():
+        return jsonify({"success": False, "error": "File not found"}), 404
+
+    try:
+        # Create KEEP folder next to the report
+        keep_folder = _report_path.parent / "KEEP"
+        keep_folder.mkdir(exist_ok=True)
+
+        # Move file
+        dest_path = keep_folder / file_path.name
+        # Handle name conflicts
+        counter = 1
+        while dest_path.exists():
+            dest_path = keep_folder / f"{file_path.stem}_{counter}{file_path.suffix}"
+            counter += 1
+
+        shutil.move(str(file_path), str(dest_path))
+
+        # Update the report
+        if _current_report and from_category:
+            for item in _current_report.get(from_category, []):
+                current_path = item.get("path")
+                if current_path == str(file_path):
+                    if "original_path" not in item:
+                        item["original_path"] = current_path
+                    item["path"] = str(dest_path)
+                    item["moved_to"] = str(dest_path)
+                    item["status"] = "kept"
+                    break
+            save_report()
+
+        return jsonify({"success": True, "new_path": str(dest_path)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/organize", methods=["POST"])
+def organize_all():
+    """Move all images to their respective folders (KEEP, REVIEW, TRASH)."""
+    global _current_report, _report_path
+
+    if not _current_report or not _report_path:
+        return jsonify({"success": False, "error": "No report loaded"}), 500
+
+    try:
+        base_folder = _report_path.parent
+        results = {"moved": 0, "errors": [], "skipped": 0}
+
+        for category in ["keep", "review", "trash"]:
+            folder = base_folder / category.upper()
+            folder.mkdir(exist_ok=True)
+
+            for item in _current_report.get(category, []):
+                # Skip already processed items
+                if item.get("status") in ["deleted", "kept", "moved"]:
+                    results["skipped"] += 1
+                    continue
+
+                file_path = Path(item["path"])
+                if not file_path.exists():
+                    results["skipped"] += 1
+                    continue
+
+                try:
+                    dest_path = folder / file_path.name
+                    counter = 1
+                    while dest_path.exists():
+                        dest_path = folder / f"{file_path.stem}_{counter}{file_path.suffix}"
+                        counter += 1
+
+                    shutil.move(str(file_path), str(dest_path))
+
+                    if "original_path" not in item:
+                        item["original_path"] = item["path"]
+                    item["path"] = str(dest_path)
+                    item["moved_to"] = str(dest_path)
+                    item["status"] = "moved"
+                    results["moved"] += 1
+                except Exception as e:
+                    results["errors"].append({"path": str(file_path), "error": str(e)})
+
+        save_report()
+
+        return jsonify({
+            "success": True,
+            "moved": results["moved"],
+            "skipped": results["skipped"],
+            "errors": len(results["errors"]),
+            "folders": {
+                "keep": str(base_folder / "KEEP"),
+                "review": str(base_folder / "REVIEW"),
+                "trash": str(base_folder / "TRASH"),
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/delete-trash", methods=["POST"])
+def delete_all_trash():
+    """Delete all files in the TRASH category."""
+    global _current_report
+
+    if not _current_report:
+        return jsonify({"success": False, "error": "No report loaded"}), 500
+
+    try:
+        results = {"deleted": 0, "errors": [], "skipped": 0}
+
+        for item in _current_report.get("trash", []):
+            if item.get("status") == "deleted":
+                results["skipped"] += 1
+                continue
+
+            file_path = Path(item["path"])
+            if not file_path.exists():
+                results["skipped"] += 1
+                continue
+
+            try:
+                os.remove(file_path)
+                item["status"] = "deleted"
+                item["deleted"] = True
+                results["deleted"] += 1
+            except Exception as e:
+                results["errors"].append({"path": str(file_path), "error": str(e)})
+
+        save_report()
+
+        return jsonify({
+            "success": True,
+            "deleted": results["deleted"],
+            "skipped": results["skipped"],
+            "errors": len(results["errors"])
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -141,7 +313,7 @@ def generate_classify_html(report: dict) -> str:
             background: #16213e;
             border-radius: 12px;
             padding: 20px 30px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-around;
             flex-wrap: wrap;
@@ -154,6 +326,34 @@ def generate_classify_html(report: dict) -> str:
         .summary-item .value.review {{ color: #f39c12; }}
         .summary-item .value.trash {{ color: #e74c3c; }}
         .summary-item .label {{ color: #888; font-size: 0.9em; }}
+
+        .actions {{
+            background: #16213e;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }}
+
+        .action-btn {{
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+        }}
+        .action-btn:hover {{ opacity: 0.9; }}
+        .action-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .action-btn.organize {{ background: #3498db; }}
+        .action-btn.delete-trash {{ background: #e74c3c; }}
+        .action-btn.delete-visible {{ background: #c0392b; }}
+
+        .action-info {{ color: #888; font-size: 0.85em; }}
 
         .tabs {{
             display: flex;
@@ -206,7 +406,9 @@ def generate_classify_html(report: dict) -> str:
         .image-card.keep {{ border: 3px solid #4ecca3; }}
         .image-card.review {{ border: 3px solid #f39c12; }}
         .image-card.trash {{ border: 3px solid #e74c3c; }}
-        .image-card.deleted {{ border: 3px solid #666; opacity: 0.4; }}
+        .image-card.deleted {{ border: 3px solid #666; opacity: 0.3; }}
+        .image-card.kept {{ border: 3px solid #2ecc71; opacity: 0.5; }}
+        .image-card.moved {{ border: 3px solid #9b59b6; opacity: 0.6; }}
 
         .image-container {{
             width: 100%;
@@ -221,15 +423,8 @@ def generate_classify_html(report: dict) -> str:
         .image-container:hover {{ opacity: 0.9; }}
         .image-container img {{ max-width: 100%; max-height: 100%; object-fit: contain; }}
 
-        .image-placeholder {{
-            color: #444;
-            font-size: 2em;
-        }}
-
-        .image-loading {{
-            color: #666;
-            font-size: 0.9em;
-        }}
+        .image-placeholder {{ color: #444; font-size: 2em; }}
+        .image-loading {{ color: #666; font-size: 0.9em; }}
 
         .image-info {{ padding: 10px; }}
         .image-path {{
@@ -250,9 +445,9 @@ def generate_classify_html(report: dict) -> str:
         }}
 
         .image-label {{
-            font-size: 0.7em;
+            font-size: 0.65em;
             color: #aaa;
-            max-width: 120px;
+            max-width: 80px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -267,22 +462,34 @@ def generate_classify_html(report: dict) -> str:
             font-weight: bold;
         }}
 
-        .delete-btn {{
-            background: #e74c3c;
-            color: #fff;
+        .btn {{
             border: none;
-            padding: 5px 10px;
+            padding: 5px 8px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 0.75em;
+            font-size: 0.7em;
             font-weight: bold;
         }}
 
-        .delete-btn:hover {{ background: #c0392b; }}
-        .delete-btn:disabled {{ background: #666; cursor: not-allowed; }}
-        .delete-btn.deleted {{ background: #666; }}
+        .btn-keep {{ background: #4ecca3; color: #1a1a2e; }}
+        .btn-keep:hover {{ background: #3dbb92; }}
+        .btn-delete {{ background: #e74c3c; color: #fff; }}
+        .btn-delete:hover {{ background: #c0392b; }}
+        .btn:disabled {{ background: #666; color: #999; cursor: not-allowed; }}
+
+        .status-badge {{
+            font-size: 0.65em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }}
+        .status-badge.deleted {{ background: #666; color: #fff; }}
+        .status-badge.kept {{ background: #2ecc71; color: #fff; }}
+        .status-badge.moved {{ background: #9b59b6; color: #fff; }}
 
         .empty {{ color: #666; font-style: italic; padding: 40px; text-align: center; width: 100%; }}
+
+        .scroll-sentinel {{ height: 20px; width: 100%; }}
 
         footer {{
             text-align: center;
@@ -327,47 +534,12 @@ def generate_classify_html(report: dict) -> str:
             z-index: 2000;
             opacity: 0;
             transition: opacity 0.3s;
+            max-width: 400px;
         }}
         .toast.show {{ opacity: 1; }}
         .toast.success {{ background: #4ecca3; color: #1a1a2e; }}
         .toast.error {{ background: #e74c3c; }}
-
-        .bulk-actions {{
-            background: #16213e;
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }}
-
-        .bulk-btn {{
-            background: #e74c3c;
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }}
-        .bulk-btn:hover {{ background: #c0392b; }}
-
-        .load-more {{
-            width: 100%;
-            padding: 15px;
-            margin-top: 20px;
-            background: #16213e;
-            border: none;
-            color: #4ecca3;
-            font-size: 1em;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-        }}
-        .load-more:hover {{ background: #1f2b4a; }}
-        .load-more:disabled {{ color: #666; cursor: not-allowed; }}
+        .toast.info {{ background: #3498db; }}
     </style>
 </head>
 <body>
@@ -383,7 +555,7 @@ def generate_classify_html(report: dict) -> str:
     <div id="toast" class="toast"></div>
 
     <h1>Image Classification Review</h1>
-    <p class="subtitle">AI-powered classification | Lazy loading enabled</p>
+    <p class="subtitle">AI-powered classification | Infinite scroll</p>
 
     <div class="summary">
         <div class="summary-item">
@@ -404,9 +576,11 @@ def generate_classify_html(report: dict) -> str:
         </div>
     </div>
 
-    <div class="bulk-actions">
-        <button class="bulk-btn" onclick="deleteAllVisible()">Delete All Visible</button>
-        <span style="color: #888;">Delete all currently loaded images in the active tab</span>
+    <div class="actions">
+        <button class="action-btn organize" onclick="organizeAll()">Organize All to Folders</button>
+        <button class="action-btn delete-trash" onclick="deleteAllTrash()">Delete All TRASH</button>
+        <button class="action-btn delete-visible" onclick="deleteAllVisible()">Delete Visible</button>
+        <span class="action-info">Organize creates KEEP/, REVIEW/, TRASH/ folders and moves files</span>
     </div>
 
     <div class="tabs">
@@ -419,21 +593,21 @@ def generate_classify_html(report: dict) -> str:
         <h2 class="section-title trash">TRASH - Probably Delete</h2>
         <p class="section-desc">Screenshots, memes, graphics - probably safe to delete</p>
         <div id="trash-grid" class="images-grid"></div>
-        <button id="trash-load-more" class="load-more" onclick="loadMore('trash')">Load More</button>
+        <div id="trash-sentinel" class="scroll-sentinel"></div>
     </div>
 
     <div id="review-section" class="section">
         <h2 class="section-title review">REVIEW - Check Manually</h2>
         <p class="section-desc">Real photos without faces - review before deleting</p>
         <div id="review-grid" class="images-grid"></div>
-        <button id="review-load-more" class="load-more" onclick="loadMore('review')">Load More</button>
+        <div id="review-sentinel" class="scroll-sentinel"></div>
     </div>
 
     <div id="keep-section" class="section">
         <h2 class="section-title keep">KEEP - Family Photos</h2>
         <p class="section-desc">Photos with faces detected - probably want to keep</p>
         <div id="keep-grid" class="images-grid"></div>
-        <button id="keep-load-more" class="load-more" onclick="loadMore('keep')">Load More</button>
+        <div id="keep-sentinel" class="scroll-sentinel"></div>
     </div>
 
     <footer>
@@ -448,8 +622,13 @@ def generate_classify_html(report: dict) -> str:
             keep: {keep_data}
         }};
         const loaded = {{ trash: 0, review: 0, keep: 0 }};
-        const deleted = {{ trash: new Set(), review: new Set(), keep: new Set() }};
+        const counts = {{
+            trash: data.trash.filter(i => !i.deleted && i.status !== 'deleted').length,
+            review: data.review.filter(i => !i.deleted && i.status !== 'deleted').length,
+            keep: data.keep.filter(i => !i.deleted && i.status !== 'deleted').length
+        }};
         let currentTab = 'trash';
+        let loading = false;
 
         // Intersection Observer for lazy loading images
         const imageObserver = new IntersectionObserver((entries) => {{
@@ -464,21 +643,61 @@ def generate_classify_html(report: dict) -> str:
                     }}
                 }}
             }});
-        }}, {{ rootMargin: '200px' }});
+        }}, {{ rootMargin: '300px' }});
+
+        // Intersection Observer for infinite scroll
+        const scrollObserver = new IntersectionObserver((entries) => {{
+            entries.forEach(entry => {{
+                if (entry.isIntersecting && !loading) {{
+                    const category = entry.target.id.replace('-sentinel', '');
+                    if (category === currentTab) {{
+                        loadMore(category);
+                    }}
+                }}
+            }});
+        }}, {{ rootMargin: '500px' }});
+
+        // Observe all sentinels
+        ['trash', 'review', 'keep'].forEach(cat => {{
+            scrollObserver.observe(document.getElementById(cat + '-sentinel'));
+        }});
+
+        function getStatus(item) {{
+            if (item.deleted || item.status === 'deleted') return 'deleted';
+            if (item.status === 'kept') return 'kept';
+            if (item.status === 'moved') return 'moved';
+            return 'active';
+        }}
 
         function createCard(item, category) {{
             const path = item.path;
+            const originalPath = item.original_path || path;
             const clipLabel = item.clip_label || 'unknown';
             const faceCount = item.face_count || 0;
-            const shortLabel = clipLabel.replace('a ', '').replace('photograph of ', '').substring(0, 20);
+            const shortLabel = clipLabel.replace('a ', '').replace('photograph of ', '').substring(0, 15);
             const fileName = path.split(/[\\\\/]/).pop();
             const encodedPath = encodeURIComponent(path);
+            const status = getStatus(item);
 
             const card = document.createElement('div');
-            card.className = 'image-card ' + category;
+            card.className = 'image-card ' + (status === 'active' ? category : status);
             card.dataset.path = path;
+            card.dataset.originalPath = originalPath;
+            card.id = 'card-' + btoa(originalPath).replace(/[^a-zA-Z0-9]/g, '');
 
-            const faceHtml = faceCount > 0 ? `<span class="face-count">${{faceCount}} faces</span>` : '';
+            const faceHtml = faceCount > 0 ? `<span class="face-count">${{faceCount}}</span>` : '';
+
+            let buttonsHtml = '';
+            if (status === 'active') {{
+                buttonsHtml = `
+                    <button class="btn btn-keep" onclick="keepImage('${{path.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'")}}',' ${{category}}', this)">Keep</button>
+                    <button class="btn btn-delete" onclick="deleteImage('${{path.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'")}}',' ${{category}}', this)">Del</button>
+                `;
+            }} else {{
+                const statusClass = status;
+                const statusText = status.toUpperCase();
+                buttonsHtml = `<span class="status-badge ${{statusClass}}">${{statusText}}</span>`;
+            }}
 
             card.innerHTML = `
                 <div class="image-container" onclick="openLightbox('${{encodedPath}}', '${{path.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'")}}')" >
@@ -489,12 +708,11 @@ def generate_classify_html(report: dict) -> str:
                     <div class="image-meta">
                         <span class="image-label" title="${{clipLabel}}">${{shortLabel}}</span>
                         ${{faceHtml}}
-                        <button class="delete-btn" onclick="deleteImage('${{path.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'")}}',' ${{category}}', this)">Delete</button>
+                        ${{buttonsHtml}}
                     </div>
                 </div>
             `;
 
-            // Observe the image for lazy loading
             const img = card.querySelector('.lazy-image');
             imageObserver.observe(img);
 
@@ -502,26 +720,20 @@ def generate_classify_html(report: dict) -> str:
         }}
 
         function loadMore(category) {{
+            if (loading) return;
+            loading = true;
+
             const grid = document.getElementById(category + '-grid');
-            const btn = document.getElementById(category + '-load-more');
             const items = data[category];
             const start = loaded[category];
             const end = Math.min(start + PAGE_SIZE, items.length);
 
             for (let i = start; i < end; i++) {{
-                if (!deleted[category].has(items[i].path)) {{
-                    grid.appendChild(createCard(items[i], category));
-                }}
+                grid.appendChild(createCard(items[i], category));
             }}
 
             loaded[category] = end;
-
-            if (end >= items.length) {{
-                btn.disabled = true;
-                btn.textContent = 'All loaded';
-            }} else {{
-                btn.textContent = `Load More (${{items.length - end}} remaining)`;
-            }}
+            loading = false;
         }}
 
         function showTab(tab) {{
@@ -531,7 +743,6 @@ def generate_classify_html(report: dict) -> str:
             event.target.classList.add('active');
             currentTab = tab;
 
-            // Load first batch if not loaded
             if (loaded[tab] === 0) {{
                 loadMore(tab);
             }}
@@ -553,15 +764,10 @@ def generate_classify_html(report: dict) -> str:
             const toast = document.getElementById('toast');
             toast.textContent = message;
             toast.className = 'toast ' + type + ' show';
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            setTimeout(() => toast.classList.remove('show'), 4000);
         }}
 
         function updateCounts() {{
-            const counts = {{
-                trash: data.trash.length - deleted.trash.size,
-                review: data.review.length - deleted.review.size,
-                keep: data.keep.length - deleted.keep.size
-            }};
             document.getElementById('trash-count').textContent = counts.trash;
             document.getElementById('review-count').textContent = counts.review;
             document.getElementById('keep-count').textContent = counts.keep;
@@ -570,84 +776,148 @@ def generate_classify_html(report: dict) -> str:
             document.getElementById('keep-tab-count').textContent = counts.keep;
         }}
 
-        function deleteImage(path, category, button) {{
-            if (!confirm('Delete this file?\\n\\n' + path)) return;
+        function markCard(card, status) {{
+            card.classList.remove('keep', 'review', 'trash', 'deleted', 'kept', 'moved');
+            card.classList.add(status);
+            const meta = card.querySelector('.image-meta');
+            const btns = meta.querySelectorAll('.btn');
+            btns.forEach(b => b.remove());
+            const badge = document.createElement('span');
+            badge.className = 'status-badge ' + status;
+            badge.textContent = status.toUpperCase();
+            meta.appendChild(badge);
+        }}
 
+        function deleteImage(path, category, button) {{
             button.disabled = true;
-            button.textContent = '...';
 
             fetch('/api/delete', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ path: path }}),
+                body: JSON.stringify({{ path: path, category: category.trim() }}),
             }})
-            .then(response => response.json())
+            .then(r => r.json())
             .then(result => {{
                 if (result.success) {{
                     showToast('Deleted: ' + path.split(/[\\\\/]/).pop(), 'success');
                     const card = button.closest('.image-card');
-                    card.classList.remove('keep', 'review', 'trash');
-                    card.classList.add('deleted');
-                    button.textContent = 'Deleted';
-                    button.classList.add('deleted');
-                    deleted[category.trim()].add(path);
+                    markCard(card, 'deleted');
+                    counts[category.trim()]--;
                     updateCounts();
                 }} else {{
                     showToast('Error: ' + result.error, 'error');
                     button.disabled = false;
-                    button.textContent = 'Delete';
                 }}
             }})
             .catch(error => {{
                 showToast('Error: ' + error.message, 'error');
                 button.disabled = false;
-                button.textContent = 'Delete';
             }});
+        }}
+
+        function keepImage(path, category, button) {{
+            button.disabled = true;
+
+            fetch('/api/keep', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ path: path, category: category.trim() }}),
+            }})
+            .then(r => r.json())
+            .then(result => {{
+                if (result.success) {{
+                    showToast('Moved to KEEP: ' + path.split(/[\\\\/]/).pop(), 'success');
+                    const card = button.closest('.image-card');
+                    markCard(card, 'kept');
+                }} else {{
+                    showToast('Error: ' + result.error, 'error');
+                    button.disabled = false;
+                }}
+            }})
+            .catch(error => {{
+                showToast('Error: ' + error.message, 'error');
+                button.disabled = false;
+            }});
+        }}
+
+        function organizeAll() {{
+            if (!confirm('Move ALL images to KEEP/, REVIEW/, TRASH/ folders?\\n\\nThis will organize all ' + (counts.keep + counts.review + counts.trash) + ' images.')) return;
+
+            showToast('Organizing files...', 'info');
+
+            fetch('/api/organize', {{ method: 'POST' }})
+            .then(r => r.json())
+            .then(result => {{
+                if (result.success) {{
+                    showToast(`Organized! Moved: ${{result.moved}}, Skipped: ${{result.skipped}}, Errors: ${{result.errors}}`, 'success');
+                    // Reload page to refresh state
+                    setTimeout(() => location.reload(), 2000);
+                }} else {{
+                    showToast('Error: ' + result.error, 'error');
+                }}
+            }})
+            .catch(error => showToast('Error: ' + error.message, 'error'));
+        }}
+
+        function deleteAllTrash() {{
+            if (!confirm('DELETE ALL ' + counts.trash + ' TRASH images?\\n\\nThis cannot be undone!')) return;
+
+            showToast('Deleting trash files...', 'info');
+
+            fetch('/api/delete-trash', {{ method: 'POST' }})
+            .then(r => r.json())
+            .then(result => {{
+                if (result.success) {{
+                    showToast(`Deleted: ${{result.deleted}}, Skipped: ${{result.skipped}}, Errors: ${{result.errors}}`, 'success');
+                    counts.trash = 0;
+                    updateCounts();
+                    // Mark all visible trash as deleted
+                    document.querySelectorAll('#trash-grid .image-card:not(.deleted)').forEach(card => {{
+                        markCard(card, 'deleted');
+                    }});
+                }} else {{
+                    showToast('Error: ' + result.error, 'error');
+                }}
+            }})
+            .catch(error => showToast('Error: ' + error.message, 'error'));
         }}
 
         function deleteAllVisible() {{
             const grid = document.getElementById(currentTab + '-grid');
-            const cards = grid.querySelectorAll('.image-card:not(.deleted)');
+            const cards = grid.querySelectorAll('.image-card:not(.deleted):not(.kept):not(.moved)');
             if (cards.length === 0) {{
-                showToast('No images to delete', 'error');
+                showToast('No active images to delete', 'error');
                 return;
             }}
             if (!confirm('Delete ' + cards.length + ' visible images?\\n\\nThis cannot be undone!')) return;
 
+            let deleted = 0;
             cards.forEach(card => {{
-                const btn = card.querySelector('.delete-btn:not(.deleted)');
-                if (btn) {{
-                    const path = card.dataset.path;
-                    btn.disabled = true;
-                    btn.textContent = '...';
-
-                    fetch('/api/delete', {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ path: path }}),
-                    }})
-                    .then(r => r.json())
-                    .then(result => {{
-                        if (result.success) {{
-                            card.classList.remove('keep', 'review', 'trash');
-                            card.classList.add('deleted');
-                            btn.textContent = 'Deleted';
-                            btn.classList.add('deleted');
-                            deleted[currentTab].add(path);
-                            updateCounts();
-                        }}
-                    }});
-                }}
+                const path = card.dataset.path;
+                fetch('/api/delete', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ path: path, category: currentTab }}),
+                }})
+                .then(r => r.json())
+                .then(result => {{
+                    if (result.success) {{
+                        markCard(card, 'deleted');
+                        counts[currentTab]--;
+                        updateCounts();
+                        deleted++;
+                    }}
+                }});
             }});
 
-            showToast('Deleting ' + cards.length + ' files...', 'success');
+            showToast('Deleting ' + cards.length + ' files...', 'info');
         }}
 
         document.addEventListener('keydown', function(e) {{
             if (e.key === 'Escape') closeLightbox();
         }});
 
-        // Load initial batch for trash tab
+        // Load initial batch
         loadMore('trash');
     </script>
 </body>
