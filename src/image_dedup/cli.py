@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
+from .cache import HashCache
 from .dedup import DeduplicationResult, DuplicateGroup, find_duplicates, format_size
 
 console = Console()
@@ -38,41 +39,20 @@ def print_group(group: DuplicateGroup, index: int) -> None:
     console.print(Panel(table, title=title, subtitle=f"Potential savings: {format_size(group.potential_savings)}"))
 
 
-@click.command()
-@click.argument("directories", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
-@click.option("--no-recursive", "-n", is_flag=True, help="Don't scan subdirectories")
-@click.option("--exact-only", "-e", is_flag=True, help="Only find exact duplicates (faster)")
-@click.option("--similar-only", "-s", is_flag=True, help="Only find similar images")
-@click.option("--threshold", "-t", default=10, type=int, help="Similarity threshold (0-64, lower=stricter). Default: 10")
-@click.option("--hash-size", "-h", default=16, type=int, help="Perceptual hash size (8, 16, 32). Larger=more precise. Default: 16")
-@click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
-@click.option("--move-to", "-m", type=click.Path(path_type=Path), help="Move duplicates to this directory")
-@click.option("--dry-run", "-d", is_flag=True, help="Show what would be moved without actually moving")
-def main(
+def run_scan(
     directories: tuple[Path, ...],
-    no_recursive: bool,
-    exact_only: bool,
-    similar_only: bool,
+    recursive: bool,
+    find_exact: bool,
+    find_similar: bool,
     threshold: int,
     hash_size: int,
     output_json: bool,
     move_to: Path | None,
     dry_run: bool,
+    use_cache: bool,
+    cache_path: Path | None,
 ) -> None:
-    """
-    Find duplicate and similar images in DIRECTORIES.
-
-    Examples:
-
-        image-dedup ~/Photos
-
-        image-dedup ~/Photos ~/Downloads --threshold 5
-
-        image-dedup ~/Photos --exact-only --move-to ~/Duplicates
-    """
-    find_exact = not similar_only
-    find_similar = not exact_only
-
+    """Run the deduplication scan."""
     # Progress tracking
     with Progress(
         SpinnerColumn(),
@@ -88,12 +68,14 @@ def main(
 
         result = find_duplicates(
             directories=list(directories),
-            recursive=not no_recursive,
+            recursive=recursive,
             find_exact=find_exact,
             find_similar=find_similar,
             similarity_threshold=threshold,
             hash_size=hash_size,
             progress_callback=update_progress,
+            use_cache=use_cache,
+            cache_path=cache_path,
         )
 
     if output_json:
@@ -138,6 +120,101 @@ def main(
     # Move duplicates if requested
     if move_to and (result.exact_duplicates or result.similar_images):
         move_duplicates(result, move_to, dry_run)
+
+
+@click.group()
+def main() -> None:
+    """
+    Find duplicate and similar images to free up disk space.
+
+    Progress is automatically saved, so you can resume interrupted scans.
+    Cache is stored in ~/.cache/image-dedup/cache.db
+    """
+    pass
+
+
+@main.command()
+@click.argument("directories", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--no-recursive", "-n", is_flag=True, help="Don't scan subdirectories")
+@click.option("--exact-only", "-e", is_flag=True, help="Only find exact duplicates (faster)")
+@click.option("--similar-only", "-s", is_flag=True, help="Only find similar images")
+@click.option("--threshold", "-t", default=10, type=int, help="Similarity threshold (0-64, lower=stricter). Default: 10")
+@click.option("--hash-size", default=16, type=int, help="Perceptual hash size (8, 16, 32). Default: 16")
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
+@click.option("--move-to", "-m", type=click.Path(path_type=Path), help="Move duplicates to this directory")
+@click.option("--dry-run", "-d", is_flag=True, help="Show what would be moved without actually moving")
+@click.option("--no-cache", is_flag=True, help="Disable caching (don't save/resume progress)")
+@click.option("--cache-path", type=click.Path(path_type=Path), help="Custom cache file path")
+def scan(
+    directories: tuple[Path, ...],
+    no_recursive: bool,
+    exact_only: bool,
+    similar_only: bool,
+    threshold: int,
+    hash_size: int,
+    output_json: bool,
+    move_to: Path | None,
+    dry_run: bool,
+    no_cache: bool,
+    cache_path: Path | None,
+) -> None:
+    """
+    Scan DIRECTORIES for duplicate and similar images.
+
+    Examples:
+
+        image-dedup scan ~/Photos
+
+        image-dedup scan ~/Photos ~/Downloads --threshold 5
+
+        image-dedup scan ~/Photos --exact-only --move-to ~/Duplicates
+    """
+    run_scan(
+        directories=directories,
+        recursive=not no_recursive,
+        find_exact=not similar_only,
+        find_similar=not exact_only,
+        threshold=threshold,
+        hash_size=hash_size,
+        output_json=output_json,
+        move_to=move_to,
+        dry_run=dry_run,
+        use_cache=not no_cache,
+        cache_path=cache_path,
+    )
+
+
+@main.group()
+def cache() -> None:
+    """Manage the hash cache."""
+    pass
+
+
+@cache.command()
+def stats() -> None:
+    """Show cache statistics."""
+    with HashCache() as hc:
+        s = hc.stats()
+
+    console.print(Panel(
+        f"[bold]Cache file:[/bold] {s['cache_path']}\n"
+        f"[bold]Cache size:[/bold] {format_size(s['cache_size_bytes'])}\n"
+        f"[bold]Total entries:[/bold] {s['total_entries']}\n"
+        f"[bold]With SHA256:[/bold] {s['with_sha256']}\n"
+        f"[bold]With pHash:[/bold] {s['with_phash']}",
+        title="Cache Statistics",
+        border_style="blue"
+    ))
+
+
+@cache.command()
+@click.confirmation_option(prompt="Are you sure you want to clear the cache?")
+def clear() -> None:
+    """Clear all cached data."""
+    with HashCache() as hc:
+        count = hc.clear()
+
+    console.print(f"[green]Cleared {count} cached entries.[/green]")
 
 
 def move_duplicates(result: DeduplicationResult, destination: Path, dry_run: bool) -> None:

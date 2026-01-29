@@ -7,6 +7,7 @@ from typing import Callable
 
 import imagehash
 
+from .cache import HashCache, phash_from_str
 from .hasher import compute_dhash, compute_phash, compute_sha256
 from .scanner import scan_multiple_directories
 
@@ -81,6 +82,8 @@ def find_duplicates(
     similarity_threshold: int = 10,
     hash_size: int = 16,
     progress_callback: Callable[[str, int, int], None] | None = None,
+    use_cache: bool = True,
+    cache_path: Path | None = None,
 ) -> DeduplicationResult:
     """
     Find duplicate and similar images in the given directories.
@@ -93,115 +96,154 @@ def find_duplicates(
         similarity_threshold: Maximum Hamming distance for similar images (0-64)
         hash_size: Size of perceptual hash (larger = more precise)
         progress_callback: Optional callback(status, current, total) for progress updates
+        use_cache: Whether to use persistent cache for hashes (enables resume)
+        cache_path: Custom path for cache file (default: ~/.cache/image-dedup/cache.db)
 
     Returns:
         DeduplicationResult with all findings
     """
     result = DeduplicationResult()
 
-    # Phase 1: Scan and collect all images
-    if progress_callback:
-        progress_callback("Scanning directories...", 0, 0)
+    # Initialize cache
+    cache = HashCache(cache_path) if use_cache else None
 
-    images: list[ImageInfo] = []
-    for path in scan_multiple_directories(directories, recursive):
-        try:
-            size = path.stat().st_size
-            images.append(ImageInfo(path=path, size=size))
-            result.total_size += size
-        except OSError as e:
-            result.errors.append((path, str(e)))
-
-    result.total_images = len(images)
-
-    if not images:
-        return result
-
-    # Phase 2: Compute hashes
-    sha256_groups: dict[str, list[ImageInfo]] = defaultdict(list)
-    phash_list: list[ImageInfo] = []
-
-    for i, img in enumerate(images):
+    try:
+        # Phase 1: Scan and collect all images
         if progress_callback:
-            progress_callback("Computing hashes...", i + 1, len(images))
+            progress_callback("Scanning directories...", 0, 0)
 
-        try:
-            if find_exact:
-                img.sha256 = compute_sha256(img.path)
-                sha256_groups[img.sha256].append(img)
+        images: list[ImageInfo] = []
+        for path in scan_multiple_directories(directories, recursive):
+            try:
+                size = path.stat().st_size
+                images.append(ImageInfo(path=path, size=size))
+                result.total_size += size
+            except OSError as e:
+                result.errors.append((path, str(e)))
 
-            if find_similar:
-                img.phash = compute_phash(img.path, hash_size)
-                img.dhash = compute_dhash(img.path, hash_size)
-                phash_list.append(img)
+        result.total_images = len(images)
 
-        except Exception as e:
-            result.errors.append((img.path, str(e)))
+        if not images:
+            return result
 
-    # Phase 3: Find exact duplicates
-    if find_exact:
-        for sha256, group in sha256_groups.items():
-            if len(group) > 1:
-                result.exact_duplicates.append(
-                    DuplicateGroup(images=group, match_type="exact")
-                )
+        # Phase 2: Compute hashes (with cache support)
+        sha256_groups: dict[str, list[ImageInfo]] = defaultdict(list)
+        phash_list: list[ImageInfo] = []
+        cache_hits = 0
 
-    # Phase 4: Find similar images (excluding exact duplicates)
-    if find_similar:
-        if progress_callback:
-            progress_callback("Finding similar images...", 0, len(phash_list))
-
-        # Set of SHA256 hashes that are exact duplicates
-        exact_hashes = {img.sha256 for g in result.exact_duplicates for img in g.images}
-
-        # Filter out images that are exact duplicates (keep only one per group)
-        seen_sha256: set[str] = set()
-        unique_images: list[ImageInfo] = []
-        for img in phash_list:
-            if img.sha256 not in seen_sha256:
-                seen_sha256.add(img.sha256)
-                unique_images.append(img)
-
-        # Find similar images using perceptual hash
-        matched: set[int] = set()
-
-        for i, img1 in enumerate(unique_images):
-            if i in matched:
-                continue
-
+        for i, img in enumerate(images):
             if progress_callback:
-                progress_callback("Finding similar images...", i + 1, len(unique_images))
+                status = "Computing hashes..."
+                if cache and cache_hits > 0:
+                    status = f"Computing hashes ({cache_hits} cached)..."
+                progress_callback(status, i + 1, len(images))
 
-            similar_group: list[ImageInfo] = [img1]
-            min_distance = float("inf")
+            try:
+                # Try to get from cache first
+                cached = cache.get(img.path) if cache else None
 
-            for j, img2 in enumerate(unique_images[i + 1:], start=i + 1):
-                if j in matched:
+                if cached and cached.sha256 and (not find_similar or (cached.phash and cached.dhash)):
+                    # Use cached values
+                    cache_hits += 1
+                    if find_exact:
+                        img.sha256 = cached.sha256
+                        sha256_groups[img.sha256].append(img)
+                    if find_similar and cached.phash and cached.dhash:
+                        img.phash = phash_from_str(cached.phash)
+                        img.dhash = phash_from_str(cached.dhash)
+                        phash_list.append(img)
+                else:
+                    # Compute hashes
+                    stat = img.path.stat()
+
+                    if find_exact:
+                        img.sha256 = compute_sha256(img.path)
+                        sha256_groups[img.sha256].append(img)
+
+                    if find_similar:
+                        img.phash = compute_phash(img.path, hash_size)
+                        img.dhash = compute_dhash(img.path, hash_size)
+                        phash_list.append(img)
+
+                    # Save to cache immediately (survives interruption)
+                    if cache:
+                        cache.set(
+                            path=img.path,
+                            size=stat.st_size,
+                            mtime=stat.st_mtime,
+                            sha256=img.sha256,
+                            phash=img.phash,
+                            dhash=img.dhash,
+                        )
+
+            except Exception as e:
+                result.errors.append((img.path, str(e)))
+
+        # Phase 3: Find exact duplicates
+        if find_exact:
+            for sha256, group in sha256_groups.items():
+                if len(group) > 1:
+                    result.exact_duplicates.append(
+                        DuplicateGroup(images=group, match_type="exact")
+                    )
+
+        # Phase 4: Find similar images (excluding exact duplicates)
+        if find_similar:
+            if progress_callback:
+                progress_callback("Finding similar images...", 0, len(phash_list))
+
+            # Filter out images that are exact duplicates (keep only one per group)
+            seen_sha256: set[str] = set()
+            unique_images: list[ImageInfo] = []
+            for img in phash_list:
+                if img.sha256 not in seen_sha256:
+                    seen_sha256.add(img.sha256)
+                    unique_images.append(img)
+
+            # Find similar images using perceptual hash
+            matched: set[int] = set()
+
+            for i, img1 in enumerate(unique_images):
+                if i in matched:
                     continue
 
-                # Use both pHash and dHash for better accuracy
-                phash_dist = img1.phash - img2.phash
-                dhash_dist = img1.dhash - img2.dhash
+                if progress_callback:
+                    progress_callback("Finding similar images...", i + 1, len(unique_images))
 
-                # Average of both hashes
-                avg_dist = (phash_dist + dhash_dist) / 2
+                similar_group: list[ImageInfo] = [img1]
+                min_distance = float("inf")
 
-                if avg_dist <= similarity_threshold:
-                    similar_group.append(img2)
-                    matched.add(j)
-                    min_distance = min(min_distance, avg_dist)
+                for j, img2 in enumerate(unique_images[i + 1:], start=i + 1):
+                    if j in matched:
+                        continue
 
-            if len(similar_group) > 1:
-                matched.add(i)
-                result.similar_images.append(
-                    DuplicateGroup(
-                        images=similar_group,
-                        match_type="similar",
-                        similarity=int(min_distance)
+                    # Use both pHash and dHash for better accuracy
+                    phash_dist = img1.phash - img2.phash
+                    dhash_dist = img1.dhash - img2.dhash
+
+                    # Average of both hashes
+                    avg_dist = (phash_dist + dhash_dist) / 2
+
+                    if avg_dist <= similarity_threshold:
+                        similar_group.append(img2)
+                        matched.add(j)
+                        min_distance = min(min_distance, avg_dist)
+
+                if len(similar_group) > 1:
+                    matched.add(i)
+                    result.similar_images.append(
+                        DuplicateGroup(
+                            images=similar_group,
+                            match_type="similar",
+                            similarity=int(min_distance)
+                        )
                     )
-                )
 
-    return result
+        return result
+
+    finally:
+        if cache:
+            cache.close()
 
 
 def format_size(size_bytes: int) -> str:

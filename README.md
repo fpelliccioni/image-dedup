@@ -10,6 +10,7 @@ Detect duplicate and similar images to free up disk space.
   - Re-compressed images (JPEG quality differences)
   - Minor edits and color adjustments
 - **Fast scanning**: Processes thousands of images efficiently
+- **Resumable**: Progress is saved automatically - interrupted scans resume where they left off
 - **Safe operations**: Shows what would be deleted before taking action
 - **Flexible output**: Terminal display, JSON export, or automatic file organization
 
@@ -35,7 +36,7 @@ On NixOS, use the provided `shell.nix`:
 git clone https://github.com/fpelliccioni/image-dedup.git
 cd image-dedup
 nix-shell
-image-dedup ~/Photos
+image-dedup scan ~/Photos
 ```
 
 The shell automatically creates a virtualenv and sets up the required library paths.
@@ -51,7 +52,7 @@ export LD_LIBRARY_PATH="/nix/store/<your-gcc-hash>-gcc-*-lib/lib:$LD_LIBRARY_PAT
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-image-dedup ~/Photos
+image-dedup scan ~/Photos
 ```
 
 ## Usage
@@ -60,49 +61,64 @@ image-dedup ~/Photos
 
 ```bash
 # Scan a single directory
-image-dedup ~/Photos
+image-dedup scan ~/Photos
 
 # Scan multiple directories
-image-dedup ~/Photos ~/Downloads ~/Desktop
+image-dedup scan ~/Photos ~/Downloads ~/Desktop
 ```
 
-### Options
+### Scan options
 
 ```bash
 # Only find exact duplicates (faster)
-image-dedup ~/Photos --exact-only
+image-dedup scan ~/Photos --exact-only
 
 # Only find similar images
-image-dedup ~/Photos --similar-only
+image-dedup scan ~/Photos --similar-only
 
 # Don't scan subdirectories
-image-dedup ~/Photos --no-recursive
+image-dedup scan ~/Photos --no-recursive
 
 # Adjust similarity threshold (0-64, lower = stricter)
 # Default is 10, use 5 for stricter matching
-image-dedup ~/Photos --threshold 5
+image-dedup scan ~/Photos --threshold 5
 
 # Output as JSON (for scripting)
-image-dedup ~/Photos --json > duplicates.json
+image-dedup scan ~/Photos --json > duplicates.json
 
 # Move duplicates to a folder for review
-image-dedup ~/Photos --move-to ~/Duplicates
+image-dedup scan ~/Photos --move-to ~/Duplicates
 
 # Dry run (show what would be moved)
-image-dedup ~/Photos --move-to ~/Duplicates --dry-run
+image-dedup scan ~/Photos --move-to ~/Duplicates --dry-run
+
+# Disable caching (don't save progress)
+image-dedup scan ~/Photos --no-cache
+```
+
+### Cache management
+
+Progress is automatically saved to `~/.cache/image-dedup/cache.db`. If a scan is interrupted (e.g., by sleep/standby), it resumes where it left off.
+
+```bash
+# View cache statistics
+image-dedup cache stats
+
+# Clear all cached data
+image-dedup cache clear
 ```
 
 ### Examples
 
 ```bash
 # Find all duplicates in Photos, move them to a review folder
-image-dedup ~/Photos --move-to ~/PhotoDuplicates --dry-run
+image-dedup scan ~/Photos --move-to ~/PhotoDuplicates --dry-run
 
 # Strict similarity matching for photos
-image-dedup ~/Photos --threshold 5
+image-dedup scan ~/Photos --threshold 5
 
 # Quick exact-duplicate scan of Downloads
-image-dedup ~/Downloads --exact-only
+image-dedup scan ~/Downloads --exact-only
 ```
 
 ## How It Works
