@@ -394,6 +394,12 @@ def generate_classify_html(report: dict) -> str:
     summary = report.get("summary", {})
     base_dir = report.get("base_directory", "")
 
+    # Pre-generate JSON for trashed items (can't do dict comprehension inside f-string)
+    trashed_items_json = json.dumps([
+        {"path": i.get("path", ""), "original_path": i.get("original_path", i.get("path", ""))}
+        for i in report.get("trashed", [])
+    ])
+
     return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -750,7 +756,7 @@ def generate_classify_html(report: dict) -> str:
         const totals = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)} }};
         const loaded = {{ trash: 0, review: 0, keep: 0, deleted: 0 }};
         const counts = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)}, trashed: {summary.get("trashed_count", 0)} }};
-        const trashedItems = {json.dumps([{{"path": i.get("path", ""), "original_path": i.get("original_path", i.get("path", ""))}} for i in report.get("trashed", [])])};
+        const trashedItems = {trashed_items_json};
         let currentTab = 'trash';
         let loading = false;
         let fullyLoaded = {{ trash: false, review: false, keep: false, deleted: false }};
