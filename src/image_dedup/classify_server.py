@@ -29,24 +29,47 @@ _base_directory: Path | None = None
 
 
 def load_report(report_path: Path) -> dict:
-    """Load a JSON report file and separate deleted files."""
+    """Load a JSON report file and separate deleted/moved files."""
     with open(report_path, "r", encoding="utf-8") as f:
         report = json.load(f)
 
-    # Separate existing files from deleted ones
+    # Separate: active, moved (trashed/kept/etc), and deleted (file not on disk)
     deleted = []
+    trashed = []
+    moved_keep = []
+    moved_review = []
+
     for category in ["keep", "review", "trash"]:
-        existing = []
+        active = []
         for item in report.get(category, []):
             file_path = Path(item["path"])
-            if file_path.exists():
-                existing.append(item)
-            else:
+            status = item.get("status", "")
+
+            if not file_path.exists():
+                # File doesn't exist on disk
                 item["original_category"] = category
                 deleted.append(item)
-        report[category] = existing
+            elif status == "trashed":
+                # User moved to Trash/ folder
+                item["original_category"] = category
+                trashed.append(item)
+            elif status == "kept":
+                # User moved to Keep/ folder
+                item["original_category"] = category
+                moved_keep.append(item)
+            elif status in ("review", "moved"):
+                # User moved to Review/ folder or organized
+                item["original_category"] = category
+                moved_review.append(item)
+            else:
+                # Active item, not yet processed
+                active.append(item)
+        report[category] = active
 
     report["deleted"] = deleted
+    report["trashed"] = trashed
+    report["moved_keep"] = moved_keep
+    report["moved_review"] = moved_review
 
     # Update summary counts
     if "summary" in report:
@@ -54,6 +77,7 @@ def load_report(report_path: Path) -> dict:
         report["summary"]["review_count"] = len(report.get("review", []))
         report["summary"]["trash_count"] = len(report.get("trash", []))
         report["summary"]["deleted_count"] = len(deleted)
+        report["summary"]["trashed_count"] = len(trashed)
 
     return report
 
@@ -678,7 +702,7 @@ def generate_classify_html(report: dict) -> str:
         <button class="tab active" onclick="showTab('trash')">Probably Delete <span class="count" id="trash-tab-count">{summary.get("trash_count", 0)}</span></button>
         <button class="tab" onclick="showTab('review')">Review <span class="count" id="review-tab-count">{summary.get("review_count", 0)}</span></button>
         <button class="tab" onclick="showTab('keep')">Keep <span class="count" id="keep-tab-count">{summary.get("keep_count", 0)}</span></button>
-        <button class="tab" onclick="showTab('trashed')">Trash <span class="count" id="trashed-tab-count">0</span></button>
+        <button class="tab" onclick="showTab('trashed')">Trash <span class="count" id="trashed-tab-count">{summary.get("trashed_count", 0)}</span></button>
         <button class="tab" onclick="showTab('deleted')">Deleted <span class="count" id="deleted-tab-count">{summary.get("deleted_count", 0)}</span></button>
     </div>
 
@@ -725,8 +749,8 @@ def generate_classify_html(report: dict) -> str:
         const data = {{ trash: [], review: [], keep: [], deleted: [] }};
         const totals = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)} }};
         const loaded = {{ trash: 0, review: 0, keep: 0, deleted: 0 }};
-        const counts = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)}, trashed: 0 }};
-        const trashedItems = [];  // Items moved to Trash folder
+        const counts = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)}, trashed: {summary.get("trashed_count", 0)} }};
+        const trashedItems = {json.dumps([{{"path": i.get("path", ""), "original_path": i.get("original_path", i.get("path", ""))}} for i in report.get("trashed", [])])};
         let currentTab = 'trash';
         let loading = false;
         let fullyLoaded = {{ trash: false, review: false, keep: false, deleted: false }};
@@ -1072,7 +1096,16 @@ def generate_classify_html(report: dict) -> str:
             if (e.key === 'Escape') closeLightbox();
         }});
 
+        // Load trashed items from server data
+        function loadTrashedItems() {{
+            const trashedGrid = document.getElementById('trashed-grid');
+            trashedItems.forEach(item => {{
+                trashedGrid.appendChild(createTrashedCard(item));
+            }});
+        }}
+
         loadMore('trash');
+        loadTrashedItems();
     </script>
 </body>
 </html>
