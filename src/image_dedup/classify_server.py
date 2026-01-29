@@ -468,6 +468,7 @@ def generate_classify_html(report: dict) -> str:
         .section-title.review {{ color: #f39c12; }}
         .section-title.trash {{ color: #e74c3c; }}
         .section-title.deleted {{ color: #666; }}
+        .section-title.trashed {{ color: #9b59b6; }}
 
         .section-desc {{ color: #888; margin-bottom: 20px; }}
 
@@ -675,6 +676,7 @@ def generate_classify_html(report: dict) -> str:
         <button class="tab active" onclick="showTab('trash')">Probably Delete <span class="count" id="trash-tab-count">{summary.get("trash_count", 0)}</span></button>
         <button class="tab" onclick="showTab('review')">Review <span class="count" id="review-tab-count">{summary.get("review_count", 0)}</span></button>
         <button class="tab" onclick="showTab('keep')">Keep <span class="count" id="keep-tab-count">{summary.get("keep_count", 0)}</span></button>
+        <button class="tab" onclick="showTab('trashed')">Trash <span class="count" id="trashed-tab-count">0</span></button>
         <button class="tab" onclick="showTab('deleted')">Deleted <span class="count" id="deleted-tab-count">{summary.get("deleted_count", 0)}</span></button>
     </div>
 
@@ -699,6 +701,12 @@ def generate_classify_html(report: dict) -> str:
         <div id="keep-sentinel" class="scroll-sentinel"></div>
     </div>
 
+    <div id="trashed-section" class="section">
+        <h2 class="section-title trashed">Moved to Trash</h2>
+        <p class="section-desc">Images you marked for deletion - delete the Trash/ folder manually when ready</p>
+        <div id="trashed-grid" class="images-grid"></div>
+    </div>
+
     <div id="deleted-section" class="section">
         <h2 class="section-title deleted">Deleted from Disk</h2>
         <p class="section-desc">These files no longer exist on disk - already deleted</p>
@@ -715,7 +723,8 @@ def generate_classify_html(report: dict) -> str:
         const data = {{ trash: [], review: [], keep: [], deleted: [] }};
         const totals = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)} }};
         const loaded = {{ trash: 0, review: 0, keep: 0, deleted: 0 }};
-        const counts = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)} }};
+        const counts = {{ trash: {summary.get("trash_count", 0)}, review: {summary.get("review_count", 0)}, keep: {summary.get("keep_count", 0)}, deleted: {summary.get("deleted_count", 0)}, trashed: 0 }};
+        const trashedItems = [];  // Items moved to Trash folder
         let currentTab = 'trash';
         let loading = false;
         let fullyLoaded = {{ trash: false, review: false, keep: false, deleted: false }};
@@ -864,7 +873,8 @@ def generate_classify_html(report: dict) -> str:
             event.target.classList.add('active');
             currentTab = tab;
 
-            if (loaded[tab] === 0) {{
+            // trashed tab is populated dynamically, no API loading needed
+            if (tab !== 'trashed' && loaded[tab] === 0) {{
                 loadMore(tab);
             }}
         }}
@@ -897,6 +907,7 @@ def generate_classify_html(report: dict) -> str:
             document.getElementById('review-tab-count').textContent = counts.review;
             document.getElementById('keep-tab-count').textContent = counts.keep;
             document.getElementById('deleted-tab-count').textContent = counts.deleted;
+            document.getElementById('trashed-tab-count').textContent = counts.trashed;
         }}
 
         function markCard(card, status) {{
@@ -924,8 +935,20 @@ def generate_classify_html(report: dict) -> str:
                 if (result.success) {{
                     showToast('Moved to Trash: ' + path.split(/[\\\\/]/).pop(), 'success');
                     const card = button.closest('.image-card');
-                    markCard(card, 'trashed');
+
+                    // Get item data before removing
+                    const item = {{ path: result.new_path, original_path: path, status: 'trashed' }};
+                    trashedItems.push(item);
+
+                    // Add to trashed grid
+                    const trashedGrid = document.getElementById('trashed-grid');
+                    trashedGrid.appendChild(createTrashedCard(item));
+
+                    // Remove from original grid
+                    card.remove();
+
                     counts[category]--;
+                    counts.trashed++;
                     updateCounts();
                 }} else {{
                     showToast('Error: ' + result.error, 'error');
@@ -936,6 +959,31 @@ def generate_classify_html(report: dict) -> str:
                 showToast('Error: ' + error.message, 'error');
                 button.disabled = false;
             }});
+        }}
+
+        function createTrashedCard(item) {{
+            const path = item.path;
+            const originalPath = item.original_path || path;
+            const fileName = path.split(/[\\\\/]/).pop();
+            const encodedPath = encodeURIComponent(path);
+
+            const card = document.createElement('div');
+            card.className = 'image-card trashed';
+            card.dataset.path = path;
+
+            card.innerHTML = `
+                <div class="image-container" onclick="openLightbox('${{encodedPath}}', '${{path.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'")}}')" >
+                    <img src="/api/thumbnail?path=${{encodedPath}}" alt="${{fileName}}">
+                </div>
+                <div class="image-info">
+                    <div class="image-path" title="${{path}}">${{fileName}}</div>
+                    <div class="image-meta">
+                        <span class="status-badge trashed">IN TRASH</span>
+                    </div>
+                </div>
+            `;
+
+            return card;
         }}
 
         function moveToKeep(path, category, button) {{
@@ -951,7 +999,7 @@ def generate_classify_html(report: dict) -> str:
                 if (result.success) {{
                     showToast('Moved to Keep: ' + path.split(/[\\\\/]/).pop(), 'success');
                     const card = button.closest('.image-card');
-                    markCard(card, 'kept');
+                    card.remove();
                     counts[category]--;
                     updateCounts();
                 }} else {{
@@ -978,7 +1026,7 @@ def generate_classify_html(report: dict) -> str:
                 if (result.success) {{
                     showToast('Moved to Review: ' + path.split(/[\\\\/]/).pop(), 'success');
                     const card = button.closest('.image-card');
-                    markCard(card, 'review');
+                    card.remove();
                     counts[category]--;
                     updateCounts();
                 }} else {{
