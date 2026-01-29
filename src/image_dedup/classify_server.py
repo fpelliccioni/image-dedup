@@ -1073,15 +1073,54 @@ def generate_classify_html(report: dict) -> str:
             }});
         }}
 
-        function shareWhatsApp(path) {{
+        async function shareWhatsApp(path) {{
             const encodedPath = encodeURIComponent(path);
 
-            // Open image in new tab for manual copy (Clipboard API requires HTTPS)
-            const imageWindow = window.open('/api/lightbox?path=' + encodedPath, '_blank');
+            // Check if clipboard API is available (requires HTTPS)
+            if (navigator.clipboard && navigator.clipboard.write) {{
+                try {{
+                    // Fetch the image
+                    const response = await fetch('/api/lightbox?path=' + encodedPath);
+                    const blob = await response.blob();
 
+                    // Convert to PNG for better clipboard compatibility
+                    const img = new Image();
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    await new Promise((resolve, reject) => {{
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = URL.createObjectURL(blob);
+                    }});
+
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+                    // Copy to clipboard
+                    await navigator.clipboard.write([
+                        new ClipboardItem({{ 'image/png': pngBlob }})
+                    ]);
+
+                    URL.revokeObjectURL(img.src);
+                    showToast('Image copied! Paste in WhatsApp (Ctrl+V)', 'success');
+
+                    // Open WhatsApp Web
+                    setTimeout(() => {{
+                        window.open('https://web.whatsapp.com/', '_blank');
+                    }}, 800);
+                    return;
+                }} catch (error) {{
+                    console.error('Clipboard error:', error);
+                }}
+            }}
+
+            // Fallback: open image in new tab for manual copy
+            window.open('/api/lightbox?path=' + encodedPath, '_blank');
             showToast('Right-click image → Copy, then paste in WhatsApp', 'info');
-
-            // Open WhatsApp after a delay
             setTimeout(() => {{
                 window.open('https://web.whatsapp.com/', '_blank');
             }}, 1500);
@@ -1126,7 +1165,7 @@ def generate_classify_html(report: dict) -> str:
 '''
 
 
-def run_classify_server(report_path: Path, host: str = "127.0.0.1", port: int = 5000) -> None:
+def run_classify_server(report_path: Path, host: str = "127.0.0.1", port: int = 5000, use_https: bool = False) -> None:
     """Run the classification review server."""
     global _current_report, _report_path, _base_directory
 
@@ -1141,6 +1180,41 @@ def run_classify_server(report_path: Path, host: str = "127.0.0.1", port: int = 
 
     summary = _current_report.get("summary", {})
     logging.info(f"Report loaded - KEEP: {summary.get('keep_count', 0)}, REVIEW: {summary.get('review_count', 0)}, TRASH: {summary.get('trash_count', 0)}")
-    logging.info(f"Starting server at http://{host}:{port}")
 
-    app.run(host=host, port=port, debug=False, threaded=True)
+    protocol = "https" if use_https else "http"
+    logging.info(f"Starting server at {protocol}://{host}:{port}")
+
+    if use_https:
+        # Generate self-signed certificate for HTTPS
+        import ssl
+        import tempfile
+        import subprocess
+
+        cert_dir = tempfile.mkdtemp()
+        cert_file = os.path.join(cert_dir, "cert.pem")
+        key_file = os.path.join(cert_dir, "key.pem")
+
+        # Generate self-signed certificate using openssl
+        try:
+            subprocess.run([
+                "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                "-keyout", key_file, "-out", cert_file,
+                "-days", "365", "-nodes",
+                "-subj", "/CN=localhost"
+            ], check=True, capture_output=True)
+
+            logging.info(f"Generated self-signed certificate")
+            logging.info(f"NOTE: Browser will show security warning - click 'Advanced' and 'Proceed'")
+
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(cert_file, key_file)
+
+            app.run(host=host, port=port, debug=False, threaded=True, ssl_context=ssl_context)
+        except FileNotFoundError:
+            logging.error("openssl not found. Install OpenSSL or use --no-https")
+            raise
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to generate certificate: {e}")
+            raise
+    else:
+        app.run(host=host, port=port, debug=False, threaded=True)

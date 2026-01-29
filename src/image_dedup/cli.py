@@ -537,31 +537,39 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
 @click.argument("report", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--host", "-h", default="127.0.0.1", help="Host to bind to. Default: 127.0.0.1")
 @click.option("--port", "-p", default=5000, type=int, help="Port to bind to. Default: 5000")
-def classify_review(report: Path, host: str, port: int) -> None:
+@click.option("--https", "use_https", is_flag=True, help="Use HTTPS (required for clipboard/WhatsApp sharing)")
+def classify_review(report: Path, host: str, port: int, use_https: bool) -> None:
     """
     Start a web server to review classification results.
 
     Opens an interactive page to review KEEP/REVIEW/TRASH images
     and delete the ones you don't want.
 
+    Use --https to enable clipboard functionality (needed for WhatsApp sharing).
+
     Examples:
 
         image-dedup classify-review image-classify-20260129-164242.json
+
+        image-dedup classify-review report.json --https --host 0.0.0.0
     """
     from .classify_server import run_classify_server
 
+    protocol = "https" if use_https else "http"
     console.print(f"[blue]Loading report:[/blue] {report}")
-    console.print(f"[green]Starting server at:[/green] http://{host}:{port}")
+    console.print(f"[green]Starting server at:[/green] {protocol}://{host}:{port}")
+    if use_https:
+        console.print("[yellow]HTTPS enabled - browser will show security warning, click 'Advanced' → 'Proceed'[/yellow]")
     console.print("[dim]Press Ctrl+C to stop the server[/dim]")
 
     try:
         import webbrowser
-        webbrowser.open(f"http://{host}:{port}")
+        webbrowser.open(f"{protocol}://{host}:{port}")
     except Exception:
         pass
 
     try:
-        run_classify_server(report, host=host, port=port)
+        run_classify_server(report, host=host, port=port, use_https=use_https)
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped[/yellow]")
     except Exception as e:
