@@ -12,6 +12,7 @@ from rich.table import Table
 
 from .cache import HashCache
 from .dedup import DeduplicationResult, DuplicateGroup, find_duplicates, format_size
+from .review import generate_html_review
 
 console = Console()
 
@@ -328,6 +329,41 @@ def print_json_result(result: DeduplicationResult) -> None:
     """Print results as JSON to stdout."""
     data = build_report_data(result)
     print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+@main.command()
+@click.argument("report", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--output", "-o", type=click.Path(path_type=Path), help="Output HTML file path")
+@click.option("--open", "open_browser", is_flag=True, help="Open the HTML file in browser after generating")
+def review(report: Path, output: Path | None, open_browser: bool) -> None:
+    """
+    Generate an HTML review page from a JSON report.
+
+    Opens the report in your browser so you can visually verify duplicates
+    before taking action.
+
+    Examples:
+
+        image-dedup review image-dedup-rep-20260129-164242.json
+
+        image-dedup review report.json --open
+
+        image-dedup review report.json -o my-review.html
+    """
+    console.print(f"[blue]Generating HTML review from:[/blue] {report}")
+
+    try:
+        output_path = generate_html_review(report, output)
+        console.print(f"[green]Review page saved to:[/green] {output_path}")
+
+        if open_browser:
+            import webbrowser
+            webbrowser.open(f"file://{output_path.absolute()}")
+            console.print("[blue]Opened in browser[/blue]")
+
+    except Exception as e:
+        console.print(f"[red]Error generating review:[/red] {e}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
