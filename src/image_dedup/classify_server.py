@@ -561,6 +561,8 @@ def generate_classify_html(report: dict) -> str:
         .btn-keep:hover {{ background: #3dbb92; }}
         .btn-review {{ background: #f39c12; color: #1a1a2e; }}
         .btn-review:hover {{ background: #d68910; }}
+        .btn-share {{ background: #25D366; color: #fff; }}
+        .btn-share:hover {{ background: #1da851; }}
         .btn:disabled {{ background: #666; color: #999; cursor: not-allowed; }}
 
         .status-badge {{
@@ -798,6 +800,7 @@ def generate_classify_html(report: dict) -> str:
                     <button class="btn btn-trash" onclick="moveToTrash('${{escapedPath}}', '${{category}}', this)" title="Move to Trash folder">Del</button>
                     <button class="btn btn-keep" onclick="moveToKeep('${{escapedPath}}', '${{category}}', this)" title="Move to Keep folder">Keep</button>
                     <button class="btn btn-review" onclick="moveToReview('${{escapedPath}}', '${{category}}', this)" title="Move to Review folder">Later</button>
+                    <button class="btn btn-share" onclick="shareWhatsApp('${{escapedPath}}')" title="Share via WhatsApp">WA</button>
                 `;
             }} else {{
                 const statusText = status === 'trashed' ? 'TRASH' : status.toUpperCase();
@@ -1038,6 +1041,12 @@ def generate_classify_html(report: dict) -> str:
                 showToast('Error: ' + error.message, 'error');
                 button.disabled = false;
             }});
+        }}
+
+        function shareWhatsApp(path) {{
+            const fileName = path.split(/[\\\\/]/).pop();
+            const message = encodeURIComponent('Check this image: ' + fileName + '\\n\\nPath: ' + path);
+            window.open('https://web.whatsapp.com/send?text=' + message, '_blank');
         }}
 
         function organizeAll() {{
