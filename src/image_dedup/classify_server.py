@@ -1080,24 +1080,38 @@ def generate_classify_html(report: dict) -> str:
                 const response = await fetch('/api/lightbox?path=' + encodedPath);
                 const blob = await response.blob();
 
+                // Convert to PNG for better clipboard compatibility
+                const img = new Image();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                await new Promise((resolve, reject) => {{
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = URL.createObjectURL(blob);
+                }});
+
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
                 // Copy to clipboard
                 await navigator.clipboard.write([
-                    new ClipboardItem({{ [blob.type]: blob }})
+                    new ClipboardItem({{ 'image/png': pngBlob }})
                 ]);
 
-                showToast('Image copied! Paste in WhatsApp (Ctrl+V)', 'success');
+                URL.revokeObjectURL(img.src);
+                showToast('Image copied! Open WhatsApp and paste (Ctrl+V)', 'success');
 
                 // Open WhatsApp Web
                 setTimeout(() => {{
                     window.open('https://web.whatsapp.com/', '_blank');
-                }}, 500);
+                }}, 800);
             }} catch (error) {{
                 console.error('Clipboard error:', error);
-                // Fallback: just open WhatsApp with path
-                const fileName = path.split(/[\\\\/]/).pop();
-                const message = encodeURIComponent('Image: ' + fileName);
-                window.open('https://web.whatsapp.com/send?text=' + message, '_blank');
-                showToast('Could not copy image. Opening WhatsApp...', 'info');
+                showToast('Error copying image: ' + error.message, 'error');
             }}
         }}
 
