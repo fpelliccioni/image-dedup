@@ -1,6 +1,7 @@
 """Command-line interface for image-dedup."""
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -476,8 +477,20 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         output = Path.cwd() / f"image-classify-{timestamp}.json"
 
+    # Get base directory from the first image path
+    base_dir = ""
+    if report.results:
+        first_path = report.results[0].path
+        base_dir = str(first_path.parent)
+        # Try to find common parent for all paths
+        all_parents = [str(r.path.parent) for r in report.results]
+        common = os.path.commonpath(all_parents) if all_parents else ""
+        if common:
+            base_dir = common
+
     report_data = {
         "generated_at": datetime.now().isoformat(),
+        "base_directory": base_dir,
         "summary": {
             "total_images": report.total_images,
             "keep_count": report.keep_count,
