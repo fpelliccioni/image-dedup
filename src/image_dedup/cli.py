@@ -13,6 +13,7 @@ from rich.table import Table
 from .cache import HashCache
 from .dedup import DeduplicationResult, DuplicateGroup, find_duplicates, format_size
 from .review import generate_html_review
+from .server import run_server
 
 console = Console()
 
@@ -363,6 +364,44 @@ def review(report: Path, output: Path | None, open_browser: bool) -> None:
 
     except Exception as e:
         console.print(f"[red]Error generating review:[/red] {e}")
+        raise SystemExit(1)
+
+
+@main.command()
+@click.argument("report", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--host", "-h", default="127.0.0.1", help="Host to bind to. Default: 127.0.0.1")
+@click.option("--port", "-p", default=5000, type=int, help="Port to bind to. Default: 5000")
+def serve(report: Path, host: str, port: int) -> None:
+    """
+    Start a web server to review and delete duplicates.
+
+    Opens an interactive review page in your browser where you can
+    visually verify duplicates and delete them directly.
+
+    Examples:
+
+        image-dedup serve image-dedup-rep-20260129-164242.json
+
+        image-dedup serve report.json --port 8080
+
+        image-dedup serve report.json --host 0.0.0.0
+    """
+    console.print(f"[blue]Loading report:[/blue] {report}")
+    console.print(f"[green]Starting server at:[/green] http://{host}:{port}")
+    console.print("[dim]Press Ctrl+C to stop the server[/dim]")
+
+    try:
+        import webbrowser
+        webbrowser.open(f"http://{host}:{port}")
+    except Exception:
+        pass  # Don't fail if browser can't be opened
+
+    try:
+        run_server(report, host=host, port=port)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error starting server:[/red] {e}")
         raise SystemExit(1)
 
 
