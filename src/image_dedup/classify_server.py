@@ -1073,46 +1073,18 @@ def generate_classify_html(report: dict) -> str:
             }});
         }}
 
-        async function shareWhatsApp(path) {{
+        function shareWhatsApp(path) {{
             const encodedPath = encodeURIComponent(path);
-            try {{
-                // Fetch the image
-                const response = await fetch('/api/lightbox?path=' + encodedPath);
-                const blob = await response.blob();
 
-                // Convert to PNG for better clipboard compatibility
-                const img = new Image();
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
+            // Open image in new tab for manual copy (Clipboard API requires HTTPS)
+            const imageWindow = window.open('/api/lightbox?path=' + encodedPath, '_blank');
 
-                await new Promise((resolve, reject) => {{
-                    img.onload = resolve;
-                    img.onerror = reject;
-                    img.src = URL.createObjectURL(blob);
-                }});
+            showToast('Right-click image → Copy, then paste in WhatsApp', 'info');
 
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-
-                const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-
-                // Copy to clipboard
-                await navigator.clipboard.write([
-                    new ClipboardItem({{ 'image/png': pngBlob }})
-                ]);
-
-                URL.revokeObjectURL(img.src);
-                showToast('Image copied! Open WhatsApp and paste (Ctrl+V)', 'success');
-
-                // Open WhatsApp Web
-                setTimeout(() => {{
-                    window.open('https://web.whatsapp.com/', '_blank');
-                }}, 800);
-            }} catch (error) {{
-                console.error('Clipboard error:', error);
-                showToast('Error copying image: ' + error.message, 'error');
-            }}
+            // Open WhatsApp after a delay
+            setTimeout(() => {{
+                window.open('https://web.whatsapp.com/', '_blank');
+            }}, 1500);
         }}
 
         function organizeAll() {{
