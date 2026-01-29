@@ -8,9 +8,10 @@ from pathlib import Path
 from PIL import Image
 
 THUMBNAIL_SIZE = (300, 300)
+LIGHTBOX_SIZE = (1200, 1200)
 
 
-def generate_thumbnail_base64(image_path: Path, size: tuple[int, int] = THUMBNAIL_SIZE) -> str | None:
+def generate_image_base64(image_path: Path, size: tuple[int, int]) -> str | None:
     """Generate a base64-encoded thumbnail of an image."""
     try:
         with Image.open(image_path) as img:
@@ -309,9 +310,116 @@ def _generate_html_header(report: dict) -> str:
             color: #4ecca3;
             text-decoration: none;
         }}
+
+        /* Lightbox modal */
+        .lightbox {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1000;
+            cursor: pointer;
+        }}
+
+        .lightbox.active {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }}
+
+        .lightbox img {{
+            max-width: 90%;
+            max-height: 80%;
+            object-fit: contain;
+            border-radius: 8px;
+        }}
+
+        .lightbox-info {{
+            color: #fff;
+            margin-top: 15px;
+            text-align: center;
+            max-width: 90%;
+        }}
+
+        .lightbox-path {{
+            font-size: 0.9em;
+            color: #888;
+            word-break: break-all;
+        }}
+
+        .lightbox-size {{
+            font-size: 1.1em;
+            color: #4ecca3;
+            margin-top: 5px;
+        }}
+
+        .lightbox-close {{
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 40px;
+            color: #fff;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }}
+
+        .lightbox-close:hover {{
+            opacity: 1;
+        }}
+
+        .lightbox-hint {{
+            position: absolute;
+            bottom: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }}
+
+        .image-container {{
+            cursor: pointer;
+        }}
+
+        .image-container:hover {{
+            opacity: 0.9;
+        }}
     </style>
 </head>
 <body>
+    <!-- Lightbox modal -->
+    <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close">&times;</span>
+        <img id="lightbox-img" src="" alt="">
+        <div class="lightbox-info">
+            <div id="lightbox-path" class="lightbox-path"></div>
+            <div id="lightbox-size" class="lightbox-size"></div>
+        </div>
+        <div class="lightbox-hint">Click anywhere or press ESC to close</div>
+    </div>
+
+    <script>
+        function openLightbox(imgSrc, path, size) {{
+            document.getElementById('lightbox-img').src = imgSrc;
+            document.getElementById('lightbox-path').textContent = path;
+            document.getElementById('lightbox-size').textContent = size;
+            document.getElementById('lightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }}
+
+        function closeLightbox() {{
+            document.getElementById('lightbox').classList.remove('active');
+            document.body.style.overflow = '';
+        }}
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                closeLightbox();
+            }}
+        }});
+    </script>
     <h1>Image Dedup Review</h1>
     <p class="subtitle">Generated: {report.get("generated_at", "Unknown")}</p>
 '''
@@ -362,10 +470,15 @@ def _generate_group_html(group: dict, index: int, group_type: str) -> str:
         size = file_info.get("size_human", "Unknown")
         is_keep = i == 0  # First (largest) is marked as keep
 
-        # Generate thumbnail
-        thumbnail = generate_thumbnail_base64(path)
+        # Generate thumbnail and lightbox images
+        thumbnail = generate_image_base64(path, THUMBNAIL_SIZE)
+        lightbox_img = generate_image_base64(path, LIGHTBOX_SIZE)
+
         if thumbnail:
-            img_html = f'<img src="data:image/jpeg;base64,{thumbnail}" alt="{path.name}">'
+            # Escape quotes in path for JavaScript
+            escaped_path = str(path).replace("\\", "\\\\").replace("'", "\\'")
+            lightbox_src = f"data:image/jpeg;base64,{lightbox_img}" if lightbox_img else f"data:image/jpeg;base64,{thumbnail}"
+            img_html = f'<img src="data:image/jpeg;base64,{thumbnail}" alt="{path.name}" onclick="openLightbox(\'{lightbox_src}\', \'{escaped_path}\', \'{size}\')">'
         else:
             img_html = f'<span class="image-placeholder">Cannot load image</span>'
 

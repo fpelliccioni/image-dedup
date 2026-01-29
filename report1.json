@@ -1,0 +1,608 @@
+{
+  "generated_at": "2026-01-14T00:00:00",
+  "source": "Parsed from report1.log (Windows scan of D:\\Data\\Xiaomi12 - 2026-01-14)",
+  "summary": {
+    "total_images": 4107,
+    "total_size": 12992276070,
+    "total_size_human": "12.1 GB",
+    "exact_duplicate_count": 13,
+    "exact_duplicate_groups": 9,
+    "similar_count": 52,
+    "similar_groups": 23,
+    "potential_savings_exact": 7437718,
+    "potential_savings_similar": 19968501,
+    "potential_savings_total": 27406219,
+    "potential_savings_human": "26.1 MB",
+    "error_count": 0
+  },
+  "exact_duplicates": [
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Camara\\IMG_20240710_121319.jpg",
+          "size": 1677721,
+          "size_human": "1.6 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\IMG_20240710_121319.jpg",
+          "size": 1677721,
+          "size_human": "1.6 MB"
+        }
+      ],
+      "potential_savings": 1677721,
+      "potential_savings_human": "1.6 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\1500x500 (1).jpeg",
+          "size": 70553,
+          "size_human": "68.9 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\1500x500.jpeg",
+          "size": 70553,
+          "size_human": "68.9 KB"
+        }
+      ],
+      "potential_savings": 70553,
+      "potential_savings_human": "68.9 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\descarga-27-jpg. (1).jpg",
+          "size": 9728,
+          "size_human": "9.5 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\descarga-27-jpg..jpg",
+          "size": 9728,
+          "size_human": "9.5 KB"
+        }
+      ],
+      "potential_savings": 9728,
+      "potential_savings_human": "9.5 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\EbCo-RZXQAA8T2R.jpg",
+          "size": 57651,
+          "size_human": "56.3 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\MMD_1107062_1661f289370842e18dee90da8734a933_futbol_cuantas_copas_tenes.jpg",
+          "size": 57651,
+          "size_human": "56.3 KB"
+        }
+      ],
+      "potential_savings": 57651,
+      "potential_savings_human": "56.3 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\EHjmGZmX0AANTHM (1).jpg",
+          "size": 111820,
+          "size_human": "109.2 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\EHjmGZmX0AANTHM.jpg",
+          "size": 111820,
+          "size_human": "109.2 KB"
+        }
+      ],
+      "potential_savings": 111820,
+      "potential_savings_human": "109.2 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-06-10-07-48-04-848_com.android.chrome.jpg",
+          "size": 42291,
+          "size_human": "41.3 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-07-27-01-12-38-308_com.android.chrome.jpg",
+          "size": 42291,
+          "size_human": "41.3 KB"
+        }
+      ],
+      "potential_savings": 42291,
+      "potential_savings_human": "41.3 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-06-23-09-32-38-344_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-06-23-09-32-46-677_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-06-23-09-32-47-921_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-06-23-09-32-49-112_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-06-23-09-32-50-309_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-06-23-09-32-51-509_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        }
+      ],
+      "potential_savings": 5242880,
+      "potential_savings_human": "5.0 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20220607-WA0014(1).jpg",
+          "size": 114380,
+          "size_human": "111.7 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20220607-WA0014.jpg",
+          "size": 114380,
+          "size_human": "111.7 KB"
+        }
+      ],
+      "potential_savings": 114380,
+      "potential_savings_human": "111.7 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20220607-WA0015(1).jpg",
+          "size": 110694,
+          "size_human": "108.1 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20220607-WA0015.jpg",
+          "size": 110694,
+          "size_human": "108.1 KB"
+        }
+      ],
+      "potential_savings": 110694,
+      "potential_savings_human": "108.1 KB"
+    }
+  ],
+  "similar_images": [
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Camara\\IMG_20221213_095941.jpg",
+          "size": 5767168,
+          "size_human": "5.5 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20221213-WA0013.jpg",
+          "size": 202240,
+          "size_human": "197.5 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 202240,
+      "potential_savings_human": "197.5 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Camara\\IMG_20240508_204344.jpg",
+          "size": 4508876,
+          "size_human": "4.3 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Camara\\IMG_20240508_204344_1.jpg",
+          "size": 3040870,
+          "size_human": "2.9 MB"
+        }
+      ],
+      "similarity_bits": 9,
+      "potential_savings": 3040870,
+      "potential_savings_human": "2.9 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Camara\\IMG_20240811_150359.jpg",
+          "size": 3355443,
+          "size_human": "3.2 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Camara\\IMG_20240811_150425.jpg",
+          "size": 3250585,
+          "size_human": "3.1 MB"
+        }
+      ],
+      "similarity_bits": 10,
+      "potential_savings": 3250585,
+      "potential_savings_human": "3.1 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\CompressJPEG.online_512x512_image.png",
+          "size": 213913,
+          "size_human": "208.9 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\IMG_20230715_134248_104.png",
+          "size": 144691,
+          "size_human": "141.3 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\CompressJPEG.online_512x512_image.jpg",
+          "size": 29798,
+          "size_human": "29.1 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\6y0Lu1fw_400x400.jpg",
+          "size": 22323,
+          "size_human": "21.8 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\XLL_6hF6_400x400.jpg",
+          "size": 21811,
+          "size_human": "21.3 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 218623,
+      "potential_savings_human": "213.5 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\bcebf5eba4f78775902ff3177285fee6_M.jpg",
+          "size": 94822,
+          "size_human": "92.6 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20240918-WA0034.jpg",
+          "size": 44953,
+          "size_human": "43.9 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 44953,
+      "potential_savings_human": "43.9 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Whatsapp\\IMG-20221007-WA0000.jpg",
+          "size": 65433,
+          "size_human": "63.9 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\FehziHfWQAArSui.jpeg",
+          "size": 64921,
+          "size_human": "63.4 KB"
+        }
+      ],
+      "similarity_bits": 0,
+      "potential_savings": 64921,
+      "potential_savings_human": "63.4 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-10-22-09-43-35-205-edit_com.android.chrome.jpg",
+          "size": 379084,
+          "size_human": "370.2 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Downloads\\FfqGQU_XkAIJuF6.jpeg",
+          "size": 91648,
+          "size_human": "89.5 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 91648,
+      "potential_savings_human": "89.5 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-05-31-18-31-55-754_com.uefa.blockchain.android.ticket.jpg",
+          "size": 392704,
+          "size_human": "383.5 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-05-31-18-31-59-880_com.uefa.blockchain.android.ticket.jpg",
+          "size": 392396,
+          "size_human": "383.2 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-05-31-18-31-48-103_com.uefa.blockchain.android.ticket.jpg",
+          "size": 392396,
+          "size_human": "383.2 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 784792,
+      "potential_savings_human": "766.4 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-06-14-19-58-33-138_lockscreen.jpg",
+          "size": 1363148,
+          "size_human": "1.3 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2022-06-13-18-06-40-838_lockscreen.jpg",
+          "size": 1363148,
+          "size_human": "1.3 MB"
+        }
+      ],
+      "similarity_bits": 8,
+      "potential_savings": 1363148,
+      "potential_savings_human": "1.3 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-03-26-10-32-41-370_citamovil.saludresponde.jpg",
+          "size": 242688,
+          "size_human": "237.0 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-04-12-12-49-46-595_citamovil.saludresponde.jpg",
+          "size": 239718,
+          "size_human": "234.1 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-04-01-10-21-24-032_citamovil.saludresponde.jpg",
+          "size": 238489,
+          "size_human": "232.9 KB"
+        }
+      ],
+      "similarity_bits": 6,
+      "potential_savings": 478207,
+      "potential_savings_human": "467.0 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-08-24-18-29-53-264_com.android.chrome-edit.jpg",
+          "size": 719564,
+          "size_human": "702.7 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-08-24-18-26-38-209_com.android.chrome.jpg",
+          "size": 691404,
+          "size_human": "675.2 KB"
+        }
+      ],
+      "similarity_bits": 7,
+      "potential_savings": 691404,
+      "potential_savings_human": "675.2 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-11-22-19-33-27-196_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-17-23-35-26-934_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        }
+      ],
+      "similarity_bits": 10,
+      "potential_savings": 1048576,
+      "potential_savings_human": "1.0 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-08-08-18-551_com.whatsapp.jpg",
+          "size": 843673,
+          "size_human": "823.9 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-08-10-32-058_com.whatsapp.jpg",
+          "size": 843264,
+          "size_human": "823.5 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-09-44-34-132_com.whatsapp.jpg",
+          "size": 841625,
+          "size_human": "821.9 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 1684889,
+      "potential_savings_human": "1.6 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-08-10-23-057_com.whatsapp.jpg",
+          "size": 781107,
+          "size_human": "762.8 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-09-44-25-098_com.whatsapp.jpg",
+          "size": 780595,
+          "size_human": "762.3 KB"
+        }
+      ],
+      "similarity_bits": 9,
+      "potential_savings": 780595,
+      "potential_savings_human": "762.3 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-09-37-11-299_com.whatsapp.jpg",
+          "size": 921088,
+          "size_human": "899.5 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-09-39-50-056_com.whatsapp.jpg",
+          "size": 903782,
+          "size_human": "882.6 KB"
+        }
+      ],
+      "similarity_bits": 7,
+      "potential_savings": 903782,
+      "potential_savings_human": "882.6 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-12-08-22-866_com.whatsapp.jpg",
+          "size": 864358,
+          "size_human": "844.1 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-18-12-08-08-294_com.whatsapp.jpg",
+          "size": 863948,
+          "size_human": "843.7 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 863948,
+      "potential_savings_human": "843.7 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-10-20-12-29-41-162_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-12-25-00-49-31-253_lockscreen.jpg",
+          "size": 1048576,
+          "size_human": "1.0 MB"
+        }
+      ],
+      "similarity_bits": 7,
+      "potential_savings": 1048576,
+      "potential_savings_human": "1.0 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-12-24-21-05-49-488_com.whatsapp.jpg",
+          "size": 676966,
+          "size_human": "661.1 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-12-24-21-05-47-950_com.whatsapp.jpg",
+          "size": 676454,
+          "size_human": "660.6 KB"
+        }
+      ],
+      "similarity_bits": 1,
+      "potential_savings": 676454,
+      "potential_savings_human": "660.6 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-12-29-19-34-46-891_com.mo2o.vueling.jpg",
+          "size": 261017,
+          "size_human": "254.9 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2023-12-29-19-34-53-666_com.mo2o.vueling.jpg",
+          "size": 260608,
+          "size_human": "254.5 KB"
+        }
+      ],
+      "similarity_bits": 7,
+      "potential_savings": 260608,
+      "potential_savings_human": "254.5 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-03-09-15-10-21-699_lockscreen.jpg",
+          "size": 1153433,
+          "size_human": "1.1 MB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-03-29-14-10-51-161_lockscreen.jpg",
+          "size": 1153433,
+          "size_human": "1.1 MB"
+        }
+      ],
+      "similarity_bits": 7,
+      "potential_savings": 1153433,
+      "potential_savings_human": "1.1 MB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-04-16-17-33-07-272_com.hp.printercontrol.jpg",
+          "size": 103526,
+          "size_human": "101.1 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-04-17-14-19-36-576_com.hp.printercontrol.jpg",
+          "size": 101888,
+          "size_human": "99.5 KB"
+        }
+      ],
+      "similarity_bits": 8,
+      "potential_savings": 101888,
+      "potential_savings_human": "99.5 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-07-15-17-55-53-480_lockscreen.jpg",
+          "size": 1016320,
+          "size_human": "992.5 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-07-14-21-20-37-723_lockscreen.jpg",
+          "size": 1014886,
+          "size_human": "991.1 KB"
+        }
+      ],
+      "similarity_bits": 6,
+      "potential_savings": 1014886,
+      "potential_savings_human": "991.1 KB"
+    },
+    {
+      "files": [
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-09-11-05-31-52-637_com.whatsapp.jpg",
+          "size": 200294,
+          "size_human": "195.6 KB"
+        },
+        {
+          "path": "D:\\Data\\Xiaomi12 - 2026-01-14\\Screenshots\\Screenshot_2024-09-11-05-31-19-672_com.whatsapp.jpg",
+          "size": 199475,
+          "size_human": "194.8 KB"
+        }
+      ],
+      "similarity_bits": 4,
+      "potential_savings": 199475,
+      "potential_savings_human": "194.8 KB"
+    }
+  ],
+  "errors": []
+}
