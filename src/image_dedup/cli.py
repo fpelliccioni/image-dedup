@@ -411,14 +411,33 @@ def serve(report: Path, host: str, port: int) -> None:
 @click.argument("directories", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--no-recursive", "-n", is_flag=True, help="Don't scan subdirectories")
 @click.option("--output", "-o", type=click.Path(path_type=Path), help="Output JSON file path")
-def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | None) -> None:
+@click.option("--family-threshold", "-f", default=5, type=int, help="Minimum appearances to be considered family. Default: 5")
+@click.option("--face-tolerance", "-t", default=0.6, type=float, help="Face matching tolerance (lower=stricter). Default: 0.6")
+@click.option("--duplicate-threshold", "-d", default=10, type=int, help="Similarity threshold for duplicates (0-64, lower=stricter). Default: 10")
+@click.option("--no-duplicates", is_flag=True, help="Skip duplicate detection")
+def classify(
+    directories: tuple[Path, ...],
+    no_recursive: bool,
+    output: Path | None,
+    family_threshold: int,
+    face_tolerance: float,
+    duplicate_threshold: int,
+    no_duplicates: bool,
+) -> None:
     """
-    Classify images as family photos vs junk.
+    Classify images as family photos vs junk with face recognition.
 
     Uses AI to detect:
-    - Photos with faces (KEEP)
-    - Real photos without faces (REVIEW)
-    - Screenshots, memes, graphics (TRASH)
+    - KEEP: Family photos (recurring faces), pets, real photos
+    - REVIEW: Unknown faces (possible WhatsApp photos)
+    - TRASH: Screenshots, memes, graphics
+    - DUPLICATES: Similar images (keeps best quality)
+
+    Face recognition clusters faces to identify family members
+    (people who appear in 5+ photos by default).
+
+    Also detects duplicate/similar images and keeps the best one
+    (prioritizing photos with family faces and higher quality).
 
     Requires extra dependencies: pip install image-dedup[classify]
 
@@ -426,10 +445,14 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
 
         image-dedup classify ~/Pictures
 
-        image-dedup classify ~/Photos ~/Downloads -o classification.json
+        image-dedup classify ~/Photos --family-threshold 10
+
+        image-dedup classify ~/Photos -d 5 -o classification.json
+
+        image-dedup classify ~/Photos --no-duplicates
     """
     try:
-        from .classifier import classify_images, Category
+        from .classifier import classify_images, Category, SubCategory
     except ImportError as e:
         console.print("[red]Classification dependencies not installed.[/red]")
         console.print("Run: [cyan]pip install image-dedup[classify][/cyan]")
@@ -458,19 +481,47 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
         def update_progress(status: str, current: int, total: int) -> None:
             progress.update(task, description=status, completed=current, total=total)
 
-        report = classify_images(image_paths, progress_callback=update_progress)
+        report = classify_images(
+            image_paths,
+            progress_callback=update_progress,
+            family_threshold=family_threshold,
+            face_tolerance=face_tolerance,
+            duplicate_threshold=duplicate_threshold,
+            find_duplicates_flag=not no_duplicates,
+        )
+
+    # Count subcategories
+    subcategory_counts = {}
+    for r in report.results:
+        if r.subcategory:
+            key = r.subcategory.value
+            subcategory_counts[key] = subcategory_counts.get(key, 0) + 1
 
     # Print summary
     console.print()
-    console.print(Panel(
+
+    family_count = len([c for c in report.person_clusters if c.is_family])
+    summary_text = (
         f"[bold]Total images:[/bold] {report.total_images}\n"
-        f"[bold green]KEEP (with faces):[/bold green] {report.keep_count}\n"
-        f"[bold yellow]REVIEW (no faces):[/bold yellow] {report.review_count}\n"
+        f"[bold green]KEEP:[/bold green] {report.keep_count}\n"
+        f"[bold yellow]REVIEW (unknown faces):[/bold yellow] {report.review_count}\n"
         f"[bold red]TRASH (junk):[/bold red] {report.trash_count}\n"
-        f"[bold]Errors:[/bold] {len(report.errors)}",
-        title="Classification Results",
-        border_style="blue"
-    ))
+        f"[bold magenta]DUPLICATES:[/bold magenta] {report.duplicate_count}\n"
+        f"[bold]Errors:[/bold] {len(report.errors)}\n\n"
+        f"[bold cyan]People detected:[/bold cyan] {len(report.person_clusters)}\n"
+        f"[bold cyan]Family members:[/bold cyan] {family_count} (appear in {family_threshold}+ photos)"
+    )
+
+    if report.duplicate_count > 0:
+        savings = format_size(report.potential_savings)
+        summary_text += f"\n\n[bold]Potential savings:[/bold] {savings} ({report.duplicate_count} duplicates in {len(report.duplicate_groups)} groups)"
+
+    if subcategory_counts:
+        summary_text += "\n\n[bold]Keep breakdown:[/bold]"
+        for subcat, count in sorted(subcategory_counts.items()):
+            summary_text += f"\n  {subcat}: {count}"
+
+    console.print(Panel(summary_text, title="Classification Results", border_style="blue"))
 
     # Save JSON report
     if output is None:
@@ -482,7 +533,6 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
     if report.results:
         first_path = report.results[0].path
         base_dir = str(first_path.parent)
-        # Try to find common parent for all paths
         all_parents = [str(r.path.parent) for r in report.results]
         common = os.path.commonpath(all_parents) if all_parents else ""
         if common:
@@ -491,25 +541,53 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
     report_data = {
         "generated_at": datetime.now().isoformat(),
         "base_directory": base_dir,
+        "family_threshold": family_threshold,
+        "duplicate_threshold": duplicate_threshold,
         "summary": {
             "total_images": report.total_images,
             "keep_count": report.keep_count,
             "review_count": report.review_count,
             "trash_count": report.trash_count,
+            "duplicate_count": report.duplicate_count,
+            "duplicate_groups": len(report.duplicate_groups),
+            "potential_savings": report.potential_savings,
+            "potential_savings_human": format_size(report.potential_savings),
             "error_count": len(report.errors),
+            "people_detected": len(report.person_clusters),
+            "family_members": family_count,
+            "subcategories": subcategory_counts,
         },
+        "person_clusters": [
+            {
+                "id": c.id,
+                "face_count": c.face_count,
+                "is_family": c.is_family,
+                "sample_images": [str(p) for p in c.sample_paths],
+            }
+            for c in report.person_clusters
+        ],
         "keep": [
             {
                 "path": str(r.path),
+                "subcategory": r.subcategory.value if r.subcategory else None,
                 "face_count": r.face_count,
+                "family_faces": r.family_face_count,
+                "unknown_faces": r.unknown_face_count,
+                "has_pets": r.has_pets,
                 "clip_label": r.best_clip_label,
                 "confidence": r.confidence,
+                "person_ids": r.person_ids,
+                "is_duplicate": r.is_duplicate,
+                "duplicate_of": str(r.duplicate_of) if r.duplicate_of else None,
+                "duplicate_group_id": r.duplicate_group_id,
             }
-            for r in report.results if r.category == Category.KEEP
+            for r in report.results if r.category == Category.KEEP and not r.is_duplicate
         ],
         "review": [
             {
                 "path": str(r.path),
+                "face_count": r.face_count,
+                "unknown_faces": r.unknown_face_count,
                 "clip_label": r.best_clip_label,
                 "confidence": r.confidence,
             }
@@ -522,6 +600,27 @@ def classify(directories: tuple[Path, ...], no_recursive: bool, output: Path | N
                 "confidence": r.confidence,
             }
             for r in report.results if r.category == Category.TRASH
+        ],
+        "duplicate_groups": [
+            {
+                "id": g.id,
+                "best_image": str(g.best_image),
+                "duplicates": [str(p) for p in g.duplicates],
+                "all_images": [str(p) for p in g.images],
+            }
+            for g in report.duplicate_groups
+        ],
+        "duplicates": [
+            {
+                "path": str(r.path),
+                "duplicate_of": str(r.duplicate_of) if r.duplicate_of else None,
+                "duplicate_group_id": r.duplicate_group_id,
+                "subcategory": r.subcategory.value if r.subcategory else None,
+                "face_count": r.face_count,
+                "family_faces": r.family_face_count,
+                "clip_label": r.best_clip_label,
+            }
+            for r in report.results if r.is_duplicate
         ],
         "errors": [{"path": str(p), "error": e} for p, e in report.errors],
     }
