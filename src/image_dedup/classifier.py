@@ -521,6 +521,7 @@ def classify_images(
     face_tolerance: float = 0.6,
     duplicate_threshold: int = 10,
     find_duplicates_flag: bool = True,
+    use_feedback: bool = True,
 ) -> ClassificationReport:
     """
     Classify images with face recognition, clustering, and duplicate detection.
@@ -532,11 +533,32 @@ def classify_images(
         face_tolerance: Face matching tolerance (lower = stricter)
         duplicate_threshold: Max hamming distance to consider similar (0-64)
         find_duplicates_flag: Whether to find duplicates
+        use_feedback: Whether to use learned user preferences
 
     Returns:
         ClassificationReport with results, face clusters, and duplicate info
     """
     total = len(image_paths)
+
+    # Load feedback model if available
+    feedback_model = None
+    if use_feedback:
+        try:
+            from .feedback import FeedbackClassifier
+            feedback_model = FeedbackClassifier()
+            can_train, _ = feedback_model.can_train()
+            if can_train:
+                result = feedback_model.train()
+                if result.get("success"):
+                    logger.info(f"Feedback model trained: {result.get('samples_used')} samples, {result.get('train_accuracy')*100:.1f}% accuracy")
+                else:
+                    feedback_model = None
+            else:
+                feedback_model = None
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(f"Could not load feedback model: {e}")
 
     # Phase 1: Extract all face embeddings
     if progress_callback:
@@ -653,6 +675,41 @@ def classify_images(
             else:
                 # Probably junk
                 category = Category.TRASH
+
+            # Apply feedback model adjustment (only for ambiguous cases)
+            if feedback_model is not None and family_face_count == 0:
+                try:
+                    # Get CLIP embedding for feedback prediction
+                    import torch
+                    model, preprocess, _ = _load_clip()
+                    device = next(model.parameters()).device
+
+                    with Image.open(path) as img:
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        image_tensor = preprocess(img).unsqueeze(0).to(device)
+
+                    with torch.no_grad():
+                        embedding = model.encode_image(image_tensor)
+                        embedding = embedding / embedding.norm(dim=-1, keepdim=True)
+                        embedding_np = embedding[0].cpu().numpy().astype(np.float32)
+
+                    keep_prob, feedback_decision = feedback_model.predict(embedding_np)
+
+                    # Feedback can override for ambiguous cases
+                    if category == Category.TRASH and feedback_decision == "keep" and keep_prob > 0.75:
+                        category = Category.KEEP
+                        logger.debug(f"Feedback override: TRASH -> KEEP for {path.name} (prob={keep_prob:.2f})")
+                    elif category == Category.KEEP and feedback_decision == "trash" and keep_prob < 0.25:
+                        category = Category.TRASH
+                        logger.debug(f"Feedback override: KEEP -> TRASH for {path.name} (prob={keep_prob:.2f})")
+                    elif category == Category.REVIEW:
+                        if feedback_decision == "keep" and keep_prob > 0.7:
+                            category = Category.KEEP
+                        elif feedback_decision == "trash" and keep_prob < 0.3:
+                            category = Category.TRASH
+                except Exception as e:
+                    logger.debug(f"Feedback prediction failed for {path}: {e}")
 
             # Determine subcategory
             subcategory = None

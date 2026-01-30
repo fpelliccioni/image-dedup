@@ -685,5 +685,87 @@ def classify_review(report: Path, host: str, port: int, use_https: bool) -> None
         raise SystemExit(1)
 
 
+@main.group()
+def feedback() -> None:
+    """Manage learned user preferences."""
+    pass
+
+
+@feedback.command()
+def stats() -> None:
+    """Show feedback statistics."""
+    try:
+        from .feedback import FeedbackStore, FeedbackClassifier
+
+        store = FeedbackStore()
+        s = store.get_stats()
+
+        classifier = FeedbackClassifier(store)
+        can_train, train_msg = classifier.can_train()
+
+        console.print(Panel(
+            f"[bold]Feedback database:[/bold] {s['db_path']}\n"
+            f"[bold]Total feedback:[/bold] {s['total']}\n"
+            f"[bold green]Keep:[/bold green] {s['keep']}\n"
+            f"[bold red]Trash:[/bold red] {s['trash']}\n"
+            f"[bold yellow]Review:[/bold yellow] {s['review']}\n\n"
+            f"[bold]Can train:[/bold] {'Yes' if can_train else 'No'}\n"
+            f"[dim]{train_msg}[/dim]",
+            title="Feedback Statistics",
+            border_style="blue"
+        ))
+    except ImportError:
+        console.print("[red]Feedback dependencies not installed.[/red]")
+        console.print("Run: [cyan]pip install image-dedup[classify][/cyan]")
+        raise SystemExit(1)
+
+
+@feedback.command()
+def train() -> None:
+    """Train the feedback model on collected data."""
+    try:
+        from .feedback import FeedbackClassifier
+
+        console.print("[blue]Training feedback model...[/blue]")
+        classifier = FeedbackClassifier()
+        result = classifier.train()
+
+        if result.get("success"):
+            console.print(Panel(
+                f"[bold green]Model trained successfully![/bold green]\n\n"
+                f"[bold]Samples used:[/bold] {result['samples_used']}\n"
+                f"[bold]Keep samples:[/bold] {result['keep_samples']}\n"
+                f"[bold]Trash samples:[/bold] {result['trash_samples']}\n"
+                f"[bold]Training accuracy:[/bold] {result['train_accuracy']*100:.1f}%\n\n"
+                f"[dim]The model will automatically be used in future classifications.[/dim]",
+                title="Training Results",
+                border_style="green"
+            ))
+        else:
+            console.print(f"[yellow]Could not train model:[/yellow] {result.get('error')}")
+            console.print("\n[dim]Keep reviewing images to collect more feedback.[/dim]")
+
+    except ImportError:
+        console.print("[red]Feedback dependencies not installed.[/red]")
+        console.print("Run: [cyan]pip install image-dedup[classify][/cyan]")
+        raise SystemExit(1)
+
+
+@feedback.command()
+@click.confirmation_option(prompt="Are you sure you want to clear all feedback data?")
+def clear() -> None:
+    """Clear all collected feedback."""
+    try:
+        from .feedback import FeedbackStore
+
+        store = FeedbackStore()
+        count = store.clear()
+        console.print(f"[green]Cleared {count} feedback entries.[/green]")
+
+    except ImportError:
+        console.print("[red]Feedback dependencies not installed.[/red]")
+        raise SystemExit(1)
+
+
 if __name__ == "__main__":
     main()

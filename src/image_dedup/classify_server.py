@@ -18,6 +18,46 @@ try:
 except ImportError:
     pass  # pillow-heif not installed, HEIC files won't work
 
+# Feedback system (lazy loaded)
+_feedback_store = None
+_feedback_enabled = True
+
+
+def get_feedback_store():
+    """Get or create the feedback store."""
+    global _feedback_store
+    if _feedback_store is None and _feedback_enabled:
+        try:
+            from .feedback import FeedbackStore
+            _feedback_store = FeedbackStore()
+        except ImportError:
+            pass
+    return _feedback_store
+
+
+def save_feedback(image_path: str, decision: str, clip_label: str = "", face_count: int = 0):
+    """Save user feedback for an image."""
+    store = get_feedback_store()
+    if store is None:
+        return False
+
+    try:
+        from .feedback import get_clip_embedding
+        embedding = get_clip_embedding(Path(image_path))
+        if embedding is not None:
+            store.add_feedback(
+                image_path=image_path,
+                decision=decision,
+                embedding=embedding,
+                clip_label=clip_label,
+                face_count=face_count,
+            )
+            return True
+    except Exception as e:
+        logging.error(f"Failed to save feedback: {e}")
+    return False
+
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -224,9 +264,14 @@ def move_to_trash():
 
     file_path = Path(data["path"])
     from_category = data.get("category", "")
+    clip_label = data.get("clip_label", "")
+    face_count = data.get("face_count", 0)
 
     if not file_path.exists():
         return jsonify({"success": False, "error": "File not found"}), 404
+
+    # Save feedback BEFORE moving (need original path)
+    save_feedback(str(file_path), "trash", clip_label, face_count)
 
     try:
         dest_path = move_file_to_folder(file_path, "Trash")
@@ -261,9 +306,14 @@ def move_to_keep():
 
     file_path = Path(data["path"])
     from_category = data.get("category", "")
+    clip_label = data.get("clip_label", "")
+    face_count = data.get("face_count", 0)
 
     if not file_path.exists():
         return jsonify({"success": False, "error": "File not found"}), 404
+
+    # Save feedback BEFORE moving
+    save_feedback(str(file_path), "keep", clip_label, face_count)
 
     try:
         dest_path = move_file_to_folder(file_path, "Keep")
@@ -298,9 +348,14 @@ def move_to_review():
 
     file_path = Path(data["path"])
     from_category = data.get("category", "")
+    clip_label = data.get("clip_label", "")
+    face_count = data.get("face_count", 0)
 
     if not file_path.exists():
         return jsonify({"success": False, "error": "File not found"}), 404
+
+    # Save feedback BEFORE moving (review = uncertain, useful signal)
+    save_feedback(str(file_path), "review", clip_label, face_count)
 
     try:
         dest_path = move_file_to_folder(file_path, "Review")
@@ -821,6 +876,8 @@ def generate_classify_html(report: dict) -> str:
             card.className = 'image-card ' + (isDeleted ? 'deleted-file' : (status === 'active' ? category : status));
             card.dataset.path = path;
             card.dataset.originalPath = originalPath;
+            card.dataset.clipLabel = clipLabel;
+            card.dataset.faceCount = faceCount;
             card.id = 'card-' + btoa(unescape(encodeURIComponent(originalPath))).replace(/[^a-zA-Z0-9]/g, '');
 
             const faceHtml = faceCount > 0 ? `<span class="face-count">${{faceCount}}</span>` : '';
@@ -964,11 +1021,14 @@ def generate_classify_html(report: dict) -> str:
 
         function moveToTrash(path, category, button) {{
             button.disabled = true;
+            const card = button.closest('.image-card');
+            const clipLabel = card.dataset.clipLabel || '';
+            const faceCount = parseInt(card.dataset.faceCount) || 0;
 
             fetch('/api/move-to-trash', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ path: path, category: category }}),
+                body: JSON.stringify({{ path: path, category: category, clip_label: clipLabel, face_count: faceCount }}),
             }})
             .then(r => r.json())
             .then(result => {{
@@ -1028,11 +1088,14 @@ def generate_classify_html(report: dict) -> str:
 
         function moveToKeep(path, category, button) {{
             button.disabled = true;
+            const card = button.closest('.image-card');
+            const clipLabel = card.dataset.clipLabel || '';
+            const faceCount = parseInt(card.dataset.faceCount) || 0;
 
             fetch('/api/move-to-keep', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ path: path, category: category }}),
+                body: JSON.stringify({{ path: path, category: category, clip_label: clipLabel, face_count: faceCount }}),
             }})
             .then(r => r.json())
             .then(result => {{
@@ -1055,11 +1118,14 @@ def generate_classify_html(report: dict) -> str:
 
         function moveToReview(path, category, button) {{
             button.disabled = true;
+            const card = button.closest('.image-card');
+            const clipLabel = card.dataset.clipLabel || '';
+            const faceCount = parseInt(card.dataset.faceCount) || 0;
 
             fetch('/api/move-to-review', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ path: path, category: category }}),
+                body: JSON.stringify({{ path: path, category: category, clip_label: clipLabel, face_count: faceCount }}),
             }})
             .then(r => r.json())
             .then(result => {{
