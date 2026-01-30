@@ -628,8 +628,17 @@ def classify(
     with open(output, "w", encoding="utf-8") as f:
         json.dump(report_data, f, indent=2, ensure_ascii=False)
 
+    # Print errors if any
+    if report.errors:
+        console.print()
+        console.print(f"[bold red]Errors ({len(report.errors)}):[/bold red]")
+        for path, error in report.errors[:10]:  # Show first 10
+            console.print(f"  {path.name}: {error}", style="dim red")
+        if len(report.errors) > 10:
+            console.print(f"  ... and {len(report.errors) - 10} more errors", style="dim")
+
     console.print(f"\n[green]Report saved to:[/green] {output}")
-    console.print("\n[dim]Use 'image-dedup classify-review <report.json>' to review results[/dim]")
+    console.print(f"\n[dim]Use 'image-dedup classify-review {output}' to review results[/dim]")
 
 
 @main.command("classify-review")
