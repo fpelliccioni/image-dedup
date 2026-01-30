@@ -12,6 +12,13 @@ import imagehash
 import numpy as np
 from PIL import Image
 
+# Register HEIC/HEIF support
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass  # pillow-heif not installed, HEIC files won't work
+
 # Lazy imports for optional dependencies
 _clip_model = None
 _clip_preprocess = None
