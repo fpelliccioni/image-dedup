@@ -190,17 +190,19 @@ class FeedbackClassifier:
         feedback = self.store.get_all_feedback()
 
         # Prepare training data
-        # Map to binary: keep=1, trash=0, review=0.5 (treated as uncertain)
+        # Map to binary: keep=1, trash=0
+        # Skip "review" decisions - they're ambiguous
         X = []
         y = []
 
         for embedding, decision in feedback:
-            X.append(embedding)
             if decision == "keep":
+                X.append(embedding)
                 y.append(1)
             elif decision == "trash":
+                X.append(embedding)
                 y.append(0)
-            # Skip "review" for training - it's ambiguous
+            # Skip "review" - don't add to training data
 
         X = np.array(X)
         y = np.array(y)
